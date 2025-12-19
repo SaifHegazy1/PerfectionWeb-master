@@ -1,12 +1,13 @@
 import { Component, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, Location } from '@angular/router';
 import {
   LucideAngularModule,
   Users,
   TrendingUp,
   DollarSign,
-  Award
+  Award,
+  ChevronLeft
 } from 'lucide-angular';
 // import { TopNavComponent } from '../../../shared/components/top-nav/top-nav.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -31,6 +32,10 @@ export class AdminDashboardComponent implements OnInit {
   readonly TrendingUp = TrendingUp;
   readonly DollarSign = DollarSign;
   readonly Award = Award;
+  readonly ChevronLeft = ChevronLeft;
+
+  // Language signal
+  lang = signal<'en' | 'ar'>('en');
 
   // Component state
   allStudents = signal<Student[]>([]);
@@ -60,6 +65,7 @@ export class AdminDashboardComponent implements OnInit {
 
   constructor(
     private router: Router,
+    private location: Location,
     private authService: AuthService,
     private studentService: StudentService
   ) { }
@@ -109,5 +115,18 @@ export class AdminDashboardComponent implements OnInit {
     if (percentage >= 75) return 'bg-blue-500/20 text-blue-300';
     if (percentage >= 50) return 'bg-yellow-500/20 text-yellow-300';
     return 'bg-red-500/20 text-red-300';
+  }
+
+  // Go back to previous page
+  goBack(): void {
+    this.location.back();
+  }
+
+  // Toggle language between English and Arabic
+  toggleLanguage(): void {
+    const newLang = this.lang() === 'en' ? 'ar' : 'en';
+    this.lang.set(newLang);
+    document.documentElement.lang = newLang;
+    document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
   }
 }

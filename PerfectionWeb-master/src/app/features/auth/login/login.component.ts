@@ -1,19 +1,20 @@
 import { Component, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { 
-  LucideAngularModule, 
-  Eye, 
-  EyeOff, 
-  Atom, 
-  Zap, 
-  Waves, 
-  CircuitBoard, 
-  Sparkles, 
-  User, 
-  Shield, 
-  Copy 
+import { Router, Location } from '@angular/router';
+import {
+  LucideAngularModule,
+  Eye,
+  EyeOff,
+  Atom,
+  Zap,
+  Waves,
+  CircuitBoard,
+  Sparkles,
+  User,
+  Shield,
+  Copy,
+  ChevronLeft
 } from 'lucide-angular';
 import { PhysicsBackgroundComponent } from '../../../shared/components/physics-background/physics-background.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -42,6 +43,10 @@ export class LoginComponent implements OnInit {
   readonly User = User;
   readonly Shield = Shield;
   readonly Copy = Copy;
+  readonly ChevronLeft = ChevronLeft;
+
+  // Language signal
+  lang = signal<'en' | 'ar'>('en');
 
   // Signals for reactive state
   showPassword = signal(false);
@@ -55,7 +60,7 @@ export class LoginComponent implements OnInit {
   constructor(
     private router: Router,
     private authService: AuthService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     // Check if user is already logged in with "Remember Me"
@@ -97,14 +102,14 @@ export class LoginComponent implements OnInit {
 
   onPasswordChange(value: string): void {
     this.password.set(value);
-    
+
     // Calculate password strength
     let strength = 0;
     if (value.length > 6) strength += 25;
     if (value.length > 10) strength += 25;
     if (/[A-Z]/.test(value)) strength += 25;
     if (/[0-9]/.test(value)) strength += 25;
-    
+
     this.passwordStrength.set(strength);
   }
 
@@ -141,7 +146,7 @@ export class LoginComponent implements OnInit {
       next: (response) => {
         if (response.success) {
           console.log('✅ Login successful!', response.user);
-          
+
           // Check if password reset is needed (first-time login)
           if (response.needsPasswordReset) {
             console.log('⚠️ First-time login - Password reset required');
@@ -166,5 +171,18 @@ export class LoginComponent implements OnInit {
         console.error('❌ Login error:', error);
       }
     });
+  }
+
+  // Go back to previous page
+  goBack(): void {
+    this.location.back();
+  }
+
+  // Toggle language between English and Arabic
+  toggleLanguage(): void {
+    const newLang = this.lang() === 'en' ? 'ar' : 'en';
+    this.lang.set(newLang);
+    document.documentElement.lang = newLang;
+    document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
   }
 }

@@ -238,6 +238,57 @@ export class AuthService {
   }
 
   /**
+   * Change password (requires current password) for logged-in user
+   */
+  changePassword(currentPassword: string, newPassword: string): Observable<{ success: boolean; message?: string }> {
+    const user = this.currentUser();
+    if (!user) {
+      return of({ success: false, message: 'No user logged in' });
+    }
+
+    if (newPassword.length < 6) {
+      return of({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    if (user.type === 'parent') {
+      return new Observable(observer => {
+        const phone = this.normalizePhone(user.identifier || '');
+        this.http.post<{ success: boolean; message?: string }>(`${environment.apiUrl}/auth/change-password`, {
+          phone_number: phone,
+          current_password: currentPassword,
+          new_password: newPassword
+        }).subscribe({
+          next: (response) => {
+            observer.next(response);
+            observer.complete();
+          },
+          error: (error) => {
+            observer.next({ success: false, message: error.error?.message || 'Failed to change password' });
+            observer.complete();
+          }
+        });
+      });
+    } else {
+      return new Observable(observer => {
+        this.http.post<{ success: boolean; message?: string }>(`${environment.apiUrl}/admin/change-password`, {
+          username: user.identifier,
+          current_password: currentPassword,
+          new_password: newPassword
+        }).subscribe({
+          next: (response) => {
+            observer.next(response);
+            observer.complete();
+          },
+          error: (error) => {
+            observer.next({ success: false, message: error.error?.message || 'Failed to change password' });
+            observer.complete();
+          }
+        });
+      });
+    }
+  }
+
+  /**
    * Logout method
    */
   logout(): void {

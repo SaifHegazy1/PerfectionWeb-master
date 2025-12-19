@@ -345,9 +345,10 @@ def create_or_update_parent(parent_no, student_name=None):
         # Silently fail parent creation - don't block the main upload
         print(f"Warning: Could not create parent account for {parent_no}: {str(e)}")
 
-def update_database(records, session_number, quiz_mark, finish_time, group, is_general_exam):
+def update_database(records, session_number, quiz_mark, finish_time, group, is_general_exam, lecture_name='', exam_name='', has_exam_grade=True, has_payment=True, has_time=True):
     """
     Update database with parsed records
+    Also stores lecture metadata and feature flags for parent dashboard filtering
     """
     try:
         updated_count = 0
@@ -386,7 +387,16 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                     'is_general_exam': is_general_exam,
                     'attendance': record.get('attendance', 0),
                     'payment': record.get('payment', 0) or 0,
+                    'has_exam_grade': has_exam_grade,
+                    'has_payment': has_payment,
+                    'has_time': has_time,
                 }
+                
+                # Add lecture/exam metadata
+                if is_general_exam and exam_name:
+                    db_data['exam_name'] = exam_name
+                elif not is_general_exam and lecture_name:
+                    db_data['lecture_name'] = lecture_name
                 
                 # Add optional fields only if they have values
                 if final_quiz_mark is not None:
@@ -454,6 +464,11 @@ def upload_excel():
     - finish_time: datetime string
     - group: cam1, maimi, cam2, west, station1, station2, station3
     - is_general_exam: true/false
+    - lecture_name: string (for normal lectures)
+    - exam_name: string (for general exams)
+    - has_exam_grade: true/false (show exam grade in parent dashboard)
+    - has_payment: true/false (show payment in parent dashboard)
+    - has_time: true/false (show finish time in parent dashboard)
     """
     try:
         # Validate required fields
@@ -473,6 +488,11 @@ def upload_excel():
         finish_time = request.form.get('finish_time')
         group = request.form.get('group')
         is_general_exam = request.form.get('is_general_exam', 'false').lower() == 'true'
+        lecture_name = request.form.get('lecture_name', '').strip()
+        exam_name = request.form.get('exam_name', '').strip()
+        has_exam_grade = request.form.get('has_exam_grade', 'true').lower() == 'true'
+        has_payment = request.form.get('has_payment', 'true').lower() == 'true'
+        has_time = request.form.get('has_time', 'true').lower() == 'true'
         
         # Validate session number
         try:
@@ -517,7 +537,12 @@ def upload_excel():
                 quiz_mark, 
                 finish_time, 
                 group, 
-                is_general_exam
+                is_general_exam,
+                lecture_name,
+                exam_name,
+                has_exam_grade,
+                has_payment,
+                has_time
             )
             
             # Clean up uploaded file
@@ -628,7 +653,8 @@ def get_parent_students():
 
 @app.route('/api/parent/sessions', methods=['GET'])
 def get_parent_sessions():
-    """Return session records for a parent and optional student_id query param"""
+    """Return session records for a parent and optional student_id query param
+    Filters fields based on has_exam_grade, has_payment, and has_time flags"""
     phone = request.args.get('phone_number')
     student_id = request.args.get('student_id')
     if not phone:
@@ -645,20 +671,36 @@ def get_parent_sessions():
 
         sessions = []
         for r in records:
-            # Map DB fields to frontend Session interface where possible
-            sessions.append({
+            # Check which fields should be displayed based on admin flags
+            has_exam_grade = r.get('has_exam_grade', True)
+            has_payment = r.get('has_payment', True)
+            has_time = r.get('has_time', True)
+            
+            # Build session object, filtering based on admin flags
+            session = {
                 'id': r.get('id') or r.get('student_no') or r.get('student_id'),
                 'chapter': r.get('session_number'),
-                'name': r.get('student_name') or f"Session {r.get('session_number')}",
+                'name': r.get('lecture_name') or r.get('exam_name') or r.get('student_name') or f"Session {r.get('session_number')}",
                 'date': r.get('finish_time') or '',
-                'startTime': '',
-                'endTime': '',
+                'startTime': r.get('start_time') or '',
                 'attendance': 'attended' if int(r.get('attendance') or 0) == 1 else 'missed',
-                'quizCorrect': int(r.get('quiz_mark') or 0),
-                'quizTotal': 15,
-                'payment': float(r.get('payment') or 0),
                 'homeworkStatus': 'completed' if (r.get('homework_status') in (0, None)) else 'pending'
-            })
+            }
+            
+            # Conditionally add quiz mark only if has_exam_grade is true
+            if has_exam_grade:
+                session['quizCorrect'] = int(r.get('quiz_mark') or 0)
+                session['quizTotal'] = 15
+            
+            # Conditionally add payment only if has_payment is true
+            if has_payment:
+                session['payment'] = float(r.get('payment') or 0)
+            
+            # Conditionally add finish time only if has_time is true
+            if has_time:
+                session['endTime'] = r.get('finish_time') or ''
+            
+            sessions.append(session)
 
         # Sort by chapter/session_number descending
         sessions = sorted(sessions, key=lambda s: s.get('chapter') or 0, reverse=True)
@@ -780,23 +822,25 @@ def login():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Login error: {str(e)}'}), 500
 
-@app.route('/api/auth/reset-password', methods=['POST'])
-def reset_password():
+@app.route('/api/auth/change-password', methods=['POST'])
+def change_password():
     """
-    Reset password endpoint
+    Change password endpoint for parents
     Expected JSON:
     {
         "phone_number": "01234567890",
+        "current_password": "oldpassword",
         "new_password": "newpassword123"
     }
     """
     try:
         data = request.get_json()
         phone_number = data.get('phone_number', '').strip()
+        current_password = data.get('current_password', '').strip()
         new_password = data.get('new_password', '').strip()
         
-        if not phone_number or not new_password:
-            return jsonify({'success': False, 'message': 'Phone number and new password are required'}), 400
+        if not phone_number or not current_password or not new_password:
+            return jsonify({'success': False, 'message': 'Phone number, current password, and new password are required'}), 400
         
         if len(new_password) < 6:
             return jsonify({'success': False, 'message': 'Password must be at least 6 characters long'}), 400
@@ -807,6 +851,67 @@ def reset_password():
         
         if not result.data or len(result.data) == 0:
             return jsonify({'success': False, 'message': 'Parent not found'}), 404
+        
+        parent = result.data[0]
+        
+        # Check if password_hash column exists and has a value
+        if 'password_hash' not in parent or not parent['password_hash']:
+            # For new parents without password set, allow setting one without verification
+            stored_password = parent.get('password') or parent.get('password_hash')
+        else:
+            stored_password = parent.get('password_hash')
+        
+        # Verify current password (in production, use proper password hashing)
+        if stored_password and stored_password != current_password:
+            return jsonify({'success': False, 'message': 'Current password is incorrect'}), 401
+        
+        # Update to new password - try password_hash first, then password
+        try:
+            # First, try to update with password_hash column
+            try:
+                update_result = supabase.table('parents').update({
+                    'password_hash': new_password
+                }).eq('phone_number', phone_number).execute()
+                
+                # Check if update actually worked by verifying the data was updated
+                if update_result and update_result.data:
+                    return jsonify({
+                        'success': True,
+                        'message': 'Password changed successfully'
+                    }), 200
+            except Exception as hash_error:
+                # If password_hash fails, try password column instead
+                print(f"password_hash update failed, trying password column: {str(hash_error)}")
+                try:
+                    update_result = supabase.table('parents').update({
+                        'password': new_password
+                    }).eq('phone_number', phone_number).execute()
+                    
+                    if update_result and update_result.data:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Password changed successfully'
+                        }), 200
+                except Exception as password_error:
+                    print(f"password update failed: {str(password_error)}")
+                    raise password_error
+            
+            # If we get here, something went wrong
+            return jsonify({
+                'success': False,
+                'message': 'Failed to update password in database'
+            }), 500
+        except Exception as update_error:
+            error_msg = str(update_error)
+            print(f"Database update error: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'Database error: {error_msg}'}), 500
+        
+    except Exception as e:
+        print(f"Change password error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'message': f'Error changing password: {str(e)}'}), 500
         
         # Update password (in production, hash the password)
         supabase.table('parents').update({
@@ -853,32 +958,79 @@ def admin_login():
         return jsonify({'success': False, 'message': f'Admin login error: {str(e)}'}), 500
 
 
-@app.route('/api/admin/reset-password', methods=['POST'])
-def admin_reset_password():
-    """Admin password reset. Expects JSON: { username, new_password }"""
+@app.route('/api/admin/change-password', methods=['POST'])
+def admin_change_password():
+    """Admin change password. Expects JSON: { username, current_password, new_password }"""
     try:
         data = request.get_json() or {}
         username = (data.get('username') or '').strip()
+        current_password = (data.get('current_password') or '').strip()
         new_password = (data.get('new_password') or '').strip()
 
-        if not username or not new_password:
-            return jsonify({'success': False, 'message': 'Username and new password are required'}), 400
+        if not username or not current_password or not new_password:
+            return jsonify({'success': False, 'message': 'Username, current password, and new password are required'}), 400
 
         if len(new_password) < 6:
             return jsonify({'success': False, 'message': 'Password must be at least 6 characters long'}), 400
 
-        # Update admins table
+        # Find admin user
         try:
             result = supabase.table('admins').select('*').eq('username', username).execute()
             if not result.data or len(result.data) == 0:
                 return jsonify({'success': False, 'message': 'Admin user not found'}), 404
 
-            supabase.table('admins').update({'password_hash': new_password}).eq('username', username).execute()
-            return jsonify({'success': True, 'message': 'Password updated successfully'}), 200
+            admin = result.data[0]
+            
+            # Check if password_hash column exists and has a value
+            if 'password_hash' not in admin or not admin['password_hash']:
+                # For new admins without password set, allow setting one without verification
+                stored_password = admin.get('password') or admin.get('password_hash')
+            else:
+                stored_password = admin.get('password_hash')
+            
+            # Verify current password (in production, use proper password hashing)
+            if stored_password and stored_password != current_password:
+                return jsonify({'success': False, 'message': 'Current password is incorrect'}), 401
+            
+            # Update password - try password_hash first, then password
+            try:
+                # First, try to update with password_hash column
+                try:
+                    update_result = supabase.table('admins').update({'password_hash': new_password}).eq('username', username).execute()
+                    
+                    if update_result and update_result.data:
+                        return jsonify({'success': True, 'message': 'Password changed successfully'}), 200
+                except Exception as hash_error:
+                    # If password_hash fails, try password column instead
+                    print(f"Admin password_hash update failed, trying password column: {str(hash_error)}")
+                    try:
+                        update_result = supabase.table('admins').update({'password': new_password}).eq('username', username).execute()
+                        
+                        if update_result and update_result.data:
+                            return jsonify({'success': True, 'message': 'Password changed successfully'}), 200
+                    except Exception as password_error:
+                        print(f"Admin password update failed: {str(password_error)}")
+                        raise password_error
+                
+                # If we get here, something went wrong
+                return jsonify({
+                    'success': False,
+                    'message': 'Failed to update password in database'
+                }), 500
+            except Exception as update_error:
+                error_msg = str(update_error)
+                print(f"Admin password update error: {error_msg}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'message': f'Database error: {error_msg}'}), 500
         except Exception as e:
-            return jsonify({'success': False, 'message': f'Error updating admin password: {str(e)}'}), 500
+            print(f"Admin change password error: {str(e)}")
+            print(traceback.format_exc())
+            return jsonify({'success': False, 'message': f'Error changing admin password: {str(e)}'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Error updating admin password: {str(e)}'}), 500
+        print(f"Admin change password outer error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'message': f'Admin change password error: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

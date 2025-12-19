@@ -1,4 +1,18 @@
 <div class="excel-upload-container">
+  <!-- Navigation Buttons -->
+  <div class="fixed top-4 left-4 right-4 flex justify-between items-center z-20">
+    <button type="button" (click)="goBack()" class="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
+             text-white hover:bg-white/30 transition-all duration-200">
+      <lucide-angular [img]="ChevronLeft" class="w-5 h-5"></lucide-angular>
+      <span class="text-sm font-medium">{{ lang() === 'en' ? 'Back' : 'رجوع' }}</span>
+    </button>
+
+    <button type="button" (click)="toggleLanguage()" class="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
+             text-white hover:bg-white/30 transition-all duration-200 text-sm font-medium">
+      {{ lang() === 'en' ? 'EN' : 'ع/AR' }}
+    </button>
+  </div>
+
   <div class="upload-card">
     <h2>📊 Upload Excel File</h2>
     <p class="subtitle">Upload student session data from Excel files</p>
@@ -49,23 +63,62 @@
       </div>
       }
 
-      <!-- Quiz Mark -->
+      <!-- Mode-specific options -->
+      @if (!isGeneralExam) {
       <div class="form-group">
-        <label for="quizMark">Quiz Mark</label>
-        <input type="number" id="quizMark" [(ngModel)]="quizMark" name="quizMark" step="0.01"
-          placeholder="{{ isGeneralExam ? 'Optional' : 'Required for lecture' }}" [required]="!isGeneralExam"
-          [disabled]="isUploading()" />
-        <small>
-          {{ isGeneralExam ? 'Optional for general exam' : 'Required for normal lecture' }}
-        </small>
+        <label for="lectureName">Lecture Name *</label>
+        <input type="text" id="lectureName" [(ngModel)]="lectureName" name="lectureName" placeholder="Type lecture name"
+          required [disabled]="isUploading()" />
       </div>
 
-      <!-- Finish Time -->
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasExamGrade" [(ngModel)]="hasExamGrade" name="hasExamGrade"
+          [disabled]="isUploading()" />
+        <label for="hasExamGrade">Has Exam Grade</label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasPayment" [(ngModel)]="hasPayment" name="hasPayment" [disabled]="isUploading()" />
+        <label for="hasPayment">Has Payment</label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasTime" [(ngModel)]="hasTime" name="hasTime" [disabled]="isUploading()" />
+        <label for="hasTime">Has Finish Time</label>
+      </div>
+
+      @if (hasExamGrade) {
+      <div class="form-group">
+        <label for="quizMark">Quiz / Exam Mark</label>
+        <input type="number" id="quizMark" [(ngModel)]="quizMark" name="quizMark" step="0.01" placeholder="Enter mark"
+          [required]="hasExamGrade" [disabled]="isUploading()" />
+      </div>
+      }
+
+      @if (hasTime) {
       <div class="form-group">
         <label for="finishTime">Finish Time</label>
         <input type="datetime-local" id="finishTime" [(ngModel)]="finishTime" name="finishTime"
           [disabled]="isUploading()" />
       </div>
+      }
+      }
+
+      <!-- General exam fields -->
+      @if (isGeneralExam) {
+      <div class="form-group">
+        <label for="examName">Exam Name *</label>
+        <input type="text" id="examName" [(ngModel)]="examName" name="examName" placeholder="e.g., Shamel Exam October"
+          required [disabled]="isUploading()" />
+      </div>
+
+      <div class="form-group">
+        <label for="examMark">Student mark</label>
+        <input type="number" id="examMark" [(ngModel)]="quizMark" name="examMark" step="1"
+          placeholder="type here the mark entered by admin" [disabled]="isUploading()" />
+        <small>Enter integer marks (not percentage)</small>
+      </div>
+      }
 
       <!-- Group Selection -->
       <div class="form-group">

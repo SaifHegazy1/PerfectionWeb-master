@@ -1,16 +1,26 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Location } from '@angular/router';
+import {
+  LucideAngularModule,
+  ChevronLeft
+} from 'lucide-angular';
 import { ExcelUploadService, UploadResponse } from '../../../core/services/excel-upload.service';
 
 @Component({
   selector: 'app-excel-upload',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './excel-upload.component.html',
   styleUrls: ['./excel-upload.component.scss']
 })
 export class ExcelUploadComponent {
+  // Icons
+  readonly ChevronLeft = ChevronLeft;
+
+  // Language signal
+  lang = signal<'en' | 'ar'>('en');
   // Form data
   selectedFile: File | null = null;
   sessionNumber: number = 1; // lecture or exam session number (1–8)
@@ -22,6 +32,10 @@ export class ExcelUploadComponent {
   // Extra metadata
   // For normal lectures
   lectureNumber: number | null = null;
+  lectureName: string = '';
+  hasExamGrade: boolean = true;
+  hasPayment: boolean = true;
+  hasTime: boolean = true;
   // For general exams
   examName: string = '';
 
@@ -35,7 +49,10 @@ export class ExcelUploadComponent {
   uploadResult = signal<UploadResponse | null>(null);
   uploadError = signal<string | null>(null);
 
-  constructor(private excelUploadService: ExcelUploadService) {
+  constructor(
+    private location: Location,
+    private excelUploadService: ExcelUploadService
+  ) {
     this.loadOptions();
   }
 
@@ -74,9 +91,19 @@ export class ExcelUploadComponent {
       }
       // Quiz mark can be optional for exams; remove this check if you want it required
     } else {
-      // For normal lecture, quiz mark is typically required
-      if (this.quizMark === null) {
-        this.uploadError.set('Please enter the quiz mark for the lecture');
+      // For normal lecture, lecture name is required
+      if (!this.lectureName.trim()) {
+        this.uploadError.set('Please enter the lecture name');
+        return;
+      }
+      // If admin enabled exam grade, require quizMark
+      if (this.hasExamGrade && (this.quizMark === null || this.quizMark === undefined)) {
+        this.uploadError.set('Please enter the quiz/exam mark for the lecture');
+        return;
+      }
+      // If admin enabled finish time, ensure it is provided
+      if (this.hasTime && !this.finishTime) {
+        this.uploadError.set('Please select the finish time');
         return;
       }
     }
@@ -89,6 +116,10 @@ export class ExcelUploadComponent {
     const finishTimeValue = this.finishTime
       ? new Date(this.finishTime).toISOString().slice(0, 19).replace('T', ' ')
       : null;
+    // For general exam marks, ensure integer value
+    if (this.isGeneralExam && this.quizMark !== null && this.quizMark !== undefined) {
+      this.quizMark = Math.trunc(this.quizMark);
+    }
 
     this.excelUploadService
       .uploadExcel(
@@ -99,7 +130,11 @@ export class ExcelUploadComponent {
         this.selectedGroup,
         this.isGeneralExam,
         this.lectureNumber,
-        this.examName.trim() || undefined
+        this.lectureName.trim() || undefined,
+        this.examName.trim() || undefined,
+        this.hasExamGrade,
+        this.hasPayment,
+        this.hasTime
       )
       .subscribe({
         next: (response) => {
@@ -145,6 +180,19 @@ export class ExcelUploadComponent {
       return result.message;
     }
     return null;
+  }
+
+  // Go back to previous page
+  goBack(): void {
+    this.location.back();
+  }
+
+  // Toggle language between English and Arabic
+  toggleLanguage(): void {
+    const newLang = this.lang() === 'en' ? 'ar' : 'en';
+    this.lang.set(newLang);
+    document.documentElement.lang = newLang;
+    document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
   }
 }
 

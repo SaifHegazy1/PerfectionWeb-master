@@ -1,13 +1,14 @@
 import { Component, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { 
-  LucideAngularModule, 
-  Eye, 
-  EyeOff, 
+import { Router, Location } from '@angular/router';
+import {
+  LucideAngularModule,
+  Eye,
+  EyeOff,
   Shield,
-  Loader2
+  Loader2,
+  ChevronLeft
 } from 'lucide-angular';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -28,6 +29,10 @@ export class ResetPasswordComponent implements OnInit {
   readonly EyeOff = EyeOff;
   readonly Shield = Shield;
   readonly Loader2 = Loader2;
+  readonly ChevronLeft = ChevronLeft;
+
+  // Language signal
+  lang = signal<'en' | 'ar'>('en');
 
   // Form state
   showNewPassword = signal(false);
@@ -41,12 +46,12 @@ export class ResetPasswordComponent implements OnInit {
   passwordStrength = computed(() => {
     const password = this.newPassword();
     let strength = 0;
-    
+
     if (password.length > 6) strength += 25;
     if (password.length > 10) strength += 25;
     if (/[A-Z]/.test(password)) strength += 25;
     if (/[0-9]/.test(password)) strength += 25;
-    
+
     return strength;
   });
 
@@ -60,15 +65,16 @@ export class ResetPasswordComponent implements OnInit {
   });
 
   isFormValid = computed(() => {
-    return this.newPassword().length >= 6 && 
-           this.passwordsMatch() && 
-           !this.isLoading();
+    return this.newPassword().length >= 6 &&
+      this.passwordsMatch() &&
+      !this.isLoading();
   });
 
   constructor(
     private router: Router,
+    private location: Location,
     private authService: AuthService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     // Check if user is logged in and needs password reset
@@ -143,7 +149,7 @@ export class ResetPasswordComponent implements OnInit {
     this.authService.resetPassword(this.newPassword()).subscribe({
       next: (response) => {
         this.isLoading.set(false);
-        
+
         if (response.success) {
           // Password reset successful, navigate to dashboard
           const userType = this.authService.getUserType();
@@ -162,5 +168,18 @@ export class ResetPasswordComponent implements OnInit {
         console.error('Password reset error:', error);
       }
     });
+  }
+
+  // Go back to previous page
+  goBack(): void {
+    this.location.back();
+  }
+
+  // Toggle language between English and Arabic
+  toggleLanguage(): void {
+    const newLang = this.lang() === 'en' ? 'ar' : 'en';
+    this.lang.set(newLang);
+    document.documentElement.lang = newLang;
+    document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
   }
 }

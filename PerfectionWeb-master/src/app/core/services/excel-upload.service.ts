@@ -46,7 +46,11 @@ export class ExcelUploadService {
     group: string,
     isGeneralExam: boolean,
     lectureNumber?: number | null,
-    examName?: string
+    lectureName?: string,
+    examName?: string,
+    hasExamGrade: boolean = true,
+    hasPayment: boolean = true,
+    hasTime: boolean = true
   ): Observable<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -60,9 +64,17 @@ export class ExcelUploadService {
     formData.append('group', group);
     formData.append('is_general_exam', isGeneralExam.toString());
 
+    // Admin flags
+    formData.append('has_exam_grade', hasExamGrade.toString());
+    formData.append('has_payment', hasPayment.toString());
+    formData.append('has_time', hasTime.toString());
+
     // Extra metadata (backend can ignore safely if not used)
     if (lectureNumber !== undefined && lectureNumber !== null) {
       formData.append('lecture_number', lectureNumber.toString());
+    }
+    if (lectureName) {
+      formData.append('lecture_name', lectureName);
     }
     if (examName) {
       formData.append('exam_name', examName);

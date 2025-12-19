@@ -124,7 +124,8 @@ $light-lavender: #F8F7FF;
   }
 }
 
-.settings-btn, .logout-btn {
+.settings-btn,
+.logout-btn {
   height: 44px;
   border-radius: 12px;
   border: none;
@@ -407,7 +408,9 @@ $light-lavender: #F8F7FF;
         background: linear-gradient(135deg, $electric-blue, lighten($electric-blue, 10%));
         animation: float 3s ease-in-out infinite;
 
-        .illust-icon { color: white; }
+        .illust-icon {
+          color: white;
+        }
       }
 
       &.item-2 {
@@ -416,7 +419,9 @@ $light-lavender: #F8F7FF;
         background: linear-gradient(135deg, $sunset-orange, lighten($sunset-orange, 10%));
         animation: float 3s ease-in-out infinite 0.5s;
 
-        .illust-icon { color: white; }
+        .illust-icon {
+          color: white;
+        }
       }
 
       &.item-3 {
@@ -425,15 +430,24 @@ $light-lavender: #F8F7FF;
         background: linear-gradient(135deg, $vibrant-coral, lighten($vibrant-coral, 10%));
         animation: float 3s ease-in-out infinite 1s;
 
-        .illust-icon { color: white; }
+        .illust-icon {
+          color: white;
+        }
       }
     }
   }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 // ==========================================
@@ -1298,6 +1312,136 @@ $light-lavender: #F8F7FF;
 // ==========================================
 // LUCIDE ICON SIZES
 // ==========================================
+// ==========================================
+// SETTINGS MODAL
+// ==========================================
+.settings-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.settings-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  animation: fadeIn 0.4s ease-out;
+
+  h3 {
+    margin: 0 0 24px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: $deep-indigo;
+  }
+
+  .form-row {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: $muted-purple;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input {
+      padding: 10px 12px;
+      border: 1px solid #E0E0E0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+
+      &:focus {
+        outline: none;
+        border-color: $deep-purple;
+        background: #F8F7FF;
+        box-shadow: 0 0 0 3px rgba($deep-purple, 0.1);
+      }
+    }
+  }
+
+  .settings-message {
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    background: #E8F5E9;
+    color: #2E7D32;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+
+    .btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &.btn-primary {
+        background: $deep-purple;
+        color: white;
+
+        &:hover {
+          background: darken($deep-purple, 10%);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba($deep-purple, 0.3);
+        }
+      }
+
+      &.btn-secondary {
+        background: #F0F0F0;
+        color: $muted-purple;
+
+        &:hover {
+          background: #E0E0E0;
+        }
+      }
+    }
+  }
+}
+
+// ==========================================
+// LANGUAGE BUTTON
+// ==========================================
+.lang-btn {
+  padding: 8px 12px;
+  background: #F0F0F0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  color: $muted-purple;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: $deep-purple;
+    color: white;
+  }
+}
+
 lucide-angular {
   display: inline-block;
 }
@@ -1310,6 +1454,7 @@ lucide-angular {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1322,6 +1467,389 @@ lucide-angular {
   @for $i from 1 through 10 {
     &:nth-child(#{$i}) {
       animation-delay: #{$i * 0.1}s;
+    }
+  }
+}
+
+// ==========================================
+// RESPONSIVE DESIGN - MOBILE
+// ==========================================
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding-top: 60px;
+  }
+
+  .top-nav {
+    height: 60px;
+
+    .nav-content {
+      padding: 0 16px;
+    }
+  }
+
+  .brand {
+    gap: 8px;
+
+    .logo-circle {
+      width: 36px;
+      height: 36px;
+
+      .logo-icon {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .brand-text {
+      .brand-name {
+        font-size: 16px;
+      }
+
+      .brand-subtitle {
+        font-size: 11px;
+      }
+    }
+  }
+
+  .nav-actions {
+    gap: 8px;
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .main-content {
+    padding-top: 20px;
+  }
+
+  .content-wrapper {
+    padding: 0 16px;
+  }
+
+  .student-selector-wrapper {
+    margin-bottom: 20px;
+
+    .selector-label {
+      font-size: 12px;
+    }
+  }
+
+  .hero-card {
+    .hero-content {
+      flex-direction: column;
+
+      .hero-left {
+        .hero-name {
+          font-size: 24px;
+        }
+
+        .hero-stats-pills {
+          flex-direction: column;
+          gap: 8px;
+
+          .stat-pill {
+            font-size: 12px;
+          }
+        }
+      }
+
+      .hero-right {
+        display: none;
+      }
+    }
+  }
+
+  .shamel-panel {
+    flex-direction: column;
+
+    .shamel-divider {
+      width: 100%;
+      height: 1px;
+      margin: 12px 0;
+    }
+  }
+
+  .stats-row {
+    flex-direction: column;
+
+    .stat-card {
+      width: 100%;
+    }
+  }
+
+  .session-cards {
+    scroll-behavior: smooth;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    .session-card {
+      min-width: 320px;
+      max-width: 320px;
+    }
+  }
+
+  .carousel-nav {
+    display: none;
+  }
+
+  .settings-modal {
+    width: 95%;
+    max-width: 95%;
+    padding: 24px;
+
+    h3 {
+      font-size: 18px;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .top-nav .nav-content {
+    padding: 0 12px;
+  }
+
+  .brand {
+    .brand-text {
+      .brand-name {
+        font-size: 14px;
+      }
+
+      .brand-subtitle {
+        font-size: 10px;
+      }
+    }
+  }
+
+  .nav-actions {
+    gap: 6px;
+  }
+
+  .logout-btn {
+    span {
+      display: none;
+    }
+  }
+
+  .settings-btn {
+    padding: 6px;
+  }
+
+  .lang-btn {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .content-wrapper {
+    padding: 0 12px;
+  }
+
+  .hero-card {
+    padding: 16px;
+
+    .hero-left {
+      .hero-name {
+        font-size: 20px;
+      }
+
+      .hero-meta {
+        flex-direction: column;
+        gap: 6px;
+
+        .student-id-badge,
+        .student-grade {
+          font-size: 11px;
+        }
+      }
+    }
+  }
+
+  .shamel-section {
+    padding: 16px;
+
+    .section-header {
+      flex-direction: column;
+      gap: 8px;
+
+      .header-label {
+        font-size: 12px;
+      }
+
+      .date-badge {
+        font-size: 11px;
+      }
+    }
+
+    .shamel-grade-display {
+      .grade-numbers {
+
+        .grade-score,
+        .grade-total {
+          font-size: 24px;
+        }
+      }
+
+      .grade-subtitle {
+        font-size: 12px;
+      }
+    }
+  }
+
+  .stats-row {
+    .stat-card {
+      padding: 16px;
+
+      .stat-content {
+        .stat-label {
+          font-size: 11px;
+        }
+
+        .stat-value {
+          font-size: 20px;
+        }
+
+        .stat-detail {
+          font-size: 11px;
+        }
+      }
+    }
+  }
+
+  .session-cards {
+    .session-card {
+      min-width: 280px;
+      max-width: 280px;
+      padding: 12px;
+
+      .session-header {
+        gap: 8px;
+
+        .session-title {
+          font-size: 12px;
+        }
+
+        .session-topic {
+          font-size: 11px;
+        }
+
+        .status-badge {
+          font-size: 10px;
+        }
+      }
+
+      .session-info-grid {
+        gap: 12px;
+
+        .info-item {
+          gap: 4px;
+
+          .info-label {
+            font-size: 10px;
+          }
+
+          .info-value {
+            font-size: 13px;
+          }
+        }
+      }
+
+      .homework-status {
+        font-size: 11px;
+
+        .homework-badge {
+          font-size: 10px;
+        }
+      }
+    }
+  }
+
+  .settings-modal {
+    width: 95%;
+    padding: 20px;
+
+    h3 {
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-row {
+      margin-bottom: 12px;
+
+      label {
+        font-size: 12px;
+      }
+
+      input {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+    }
+
+    .modal-actions {
+      gap: 8px;
+
+      .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+    }
+  }
+}
+
+// ==========================================
+// RTL SUPPORT (ARABIC)
+// ==========================================
+:host-context([dir='rtl']) {
+  .top-nav {
+    .nav-content {
+      flex-direction: row-reverse;
+    }
+  }
+
+  .brand {
+    flex-direction: row-reverse;
+  }
+
+  .nav-actions {
+    flex-direction: row-reverse;
+  }
+
+  .hero-card {
+    .hero-content {
+      flex-direction: row-reverse;
+    }
+  }
+
+  .shamel-grade-display {
+    .grade-numbers {
+      flex-direction: row-reverse;
+    }
+  }
+
+  .session-info-grid {
+    text-align: right;
+  }
+
+  .carousel-nav {
+    &.nav-left {
+      left: auto;
+      right: 10px;
+    }
+
+    &.nav-right {
+      right: auto;
+      left: 10px;
+    }
+  }
+
+  .settings-modal {
+    .form-row {
+      text-align: right;
+
+      input {
+        text-align: right;
+        direction: rtl;
+      }
     }
   }
 }

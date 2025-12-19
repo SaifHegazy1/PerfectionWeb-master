@@ -1,5 +1,6 @@
 import { Component, signal, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import {
   LucideAngularModule,
@@ -46,6 +47,7 @@ export interface Session {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     LucideAngularModule
   ],
   templateUrl: './parent-dashboard.component.html',
@@ -74,6 +76,9 @@ export class ParentDashboardComponent implements OnInit {
   readonly Settings = Settings;
   readonly LogOut = LogOut;
 
+  // Math reference for template
+  Math = Math;
+
   // View references
   @ViewChild('sessionCarousel') sessionCarousel!: ElementRef<HTMLDivElement>;
 
@@ -81,6 +86,15 @@ export class ParentDashboardComponent implements OnInit {
   students = signal<Student[]>([]);
   selectedStudent = signal<Student | null>(null);
   sessions = signal<Session[]>([]);
+  // Settings modal / change password
+  showSettings = signal<boolean>(false);
+  currentPassword = signal('');
+  newPassword = signal('');
+  confirmPassword = signal('');
+  settingsMessage = signal<string>('');
+
+  // Language / translations (simple)
+  lang = signal<'en' | 'ar'>('en');
 
   constructor(
     private router: Router,
@@ -171,5 +185,94 @@ export class ParentDashboardComponent implements OnInit {
   onLogout(): void {
     this.authService.logout();
     this.router.navigate(['/login']);
+  }
+
+  // Open settings modal
+  openSettings(): void {
+    this.settingsMessage.set('');
+    this.currentPassword.set('');
+    this.newPassword.set('');
+    this.confirmPassword.set('');
+    this.showSettings.set(true);
+  }
+
+  closeSettings(): void {
+    this.showSettings.set(false);
+  }
+
+  submitChangePassword(): void {
+    this.settingsMessage.set('');
+    const cur = this.currentPassword();
+    const nw = this.newPassword();
+    const conf = this.confirmPassword();
+
+    if (!cur || !nw || !conf) {
+      this.settingsMessage.set('Please fill all fields');
+      return;
+    }
+    if (nw !== conf) {
+      this.settingsMessage.set('New password and confirmation do not match');
+      return;
+    }
+
+    this.authService.changePassword(cur, nw).subscribe({
+      next: (resp) => {
+        if (resp.success) {
+          this.settingsMessage.set('Password changed successfully');
+          setTimeout(() => this.closeSettings(), 1200);
+        } else {
+          this.settingsMessage.set(resp.message || 'Failed to change password');
+        }
+      },
+      error: (err) => {
+        this.settingsMessage.set('Failed to change password');
+        console.error('Change password error:', err);
+      }
+    });
+  }
+
+  // Compute current shamel grade from sessions (prefer general exam session)
+  getCurrentShamel(): { score: number; total: number; label?: string } {
+    // Try to find a session that looks like a general exam
+    const exam = this.sessions().find(s => {
+      const name = (s.name || '').toLowerCase();
+      return name.includes('exam') || name.includes('shamel') || (s.quizTotal && s.quizTotal > 0 && s.attendance === 'attended');
+    });
+
+    if (exam) {
+      return { score: exam.quizCorrect || 0, total: exam.quizTotal || 0, label: exam.name };
+    }
+
+    // Fallback to student quizzes average (map percentage to /60)
+    const student = this.selectedStudent();
+    if (student && student.quizzes && typeof student.quizzes.average === 'number') {
+      const avg = student.quizzes.average;
+      const total = 60;
+      const score = Math.round((avg / 100) * total);
+      return { score, total };
+    }
+
+    return { score: 0, total: 0 };
+  }
+
+  // Helper methods for password inputs (convert any type to string)
+  onCurrentPasswordChange(value: any): void {
+    this.currentPassword.set(String(value || ''));
+  }
+
+  onNewPasswordChange(value: any): void {
+    this.newPassword.set(String(value || ''));
+  }
+
+  onConfirmPasswordChange(value: any): void {
+    this.confirmPassword.set(String(value || ''));
+  }
+
+  // Simple language toggle
+  toggleLanguage(): void {
+    const next = this.lang() === 'en' ? 'ar' : 'en';
+    this.lang.set(next);
+    document.documentElement.lang = next;
+    document.documentElement.dir = next === 'ar' ? 'rtl' : 'ltr';
   }
 }
