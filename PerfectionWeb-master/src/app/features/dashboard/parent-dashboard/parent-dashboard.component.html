@@ -46,15 +46,15 @@
           SELECT STUDENT
         </label>
         <div class="select-container">
-          <select
+          <!-- <select
             id="student-select"
-            (change)="onStudentChange($event)"
+            (change)="onStudentChange($event)" 
             class="student-select"
           >
             <option *ngFor="let student of students()" [value]="student.id">
               {{ student.name }}
             </option>
-          </select>
+          </select> -->
           <lucide-angular [img]="ChevronDown" class="select-arrow"></lucide-angular>
         </div>
       </div>

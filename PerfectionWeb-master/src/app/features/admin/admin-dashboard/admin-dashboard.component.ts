@@ -8,7 +8,7 @@ import {
   DollarSign,
   Award
 } from 'lucide-angular';
-import { TopNavComponent } from '../../../shared/components/top-nav/top-nav.component';
+// import { TopNavComponent } from '../../../shared/components/top-nav/top-nav.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { StudentService, Student } from '../../../core/services/student.service';
 
@@ -20,7 +20,7 @@ import { StudentService, Student } from '../../../core/services/student.service'
   imports: [
     CommonModule,
     LucideAngularModule,
-    TopNavComponent
+    // TopNavComponent
   ],
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.scss']
