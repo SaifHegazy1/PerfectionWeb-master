@@ -187,8 +187,34 @@ export class ParentDashboardComponent implements OnInit {
   }
 
   onLogout(): void {
-    this.authService.logout();
-    this.router.navigate(['/login']);
+    try {
+      console.log('🔓 Parent logout initiated');
+      this.authService.logout();
+      // Prefer router navigation with replace to avoid back navigation, fallback to full reload
+      this.router.navigate(['/login'], { replaceUrl: true }).then(success => {
+        if (success) {
+          console.log('✓ Navigated to login after logout');
+        } else {
+          console.error('✗ Router navigation to /login failed - falling back to full redirect');
+          try { window.location.replace('/login'); } catch (e) { console.error('Fallback redirect failed', e); }
+        }
+      }).catch(err => {
+        console.error('✗ Navigation error during logout:', err);
+        try { window.location.replace('/login'); } catch (e) { console.error('Fallback redirect failed', e); }
+      });
+    } catch (e) {
+      console.error('✗ Error during logout:', e);
+      try { window.location.replace('/login'); } catch (err) { console.error('Fallback redirect failed', err); }
+    }
+  }
+
+  // Expose login state to template
+  isLoggedIn(): boolean {
+    try {
+      return this.authService.isLoggedIn();
+    } catch {
+      return false;
+    }
   }
 
   // Open settings modal
@@ -257,6 +283,29 @@ export class ParentDashboardComponent implements OnInit {
     }
 
     return { score: 0, total: 0 };
+  }
+
+  // Format timestamps to `MM/DD/YYYY hh:mm:ss AM/PM` (fallback to original if invalid)
+  formatTimestamp(value?: string): string {
+    if (!value) return '';
+    try {
+      const d = new Date(value);
+      if (isNaN(d.getTime())) {
+        // Try parsing as local date string
+        const parsed = Date.parse(value);
+        if (isNaN(parsed)) return value;
+        return new Date(parsed).toLocaleString('en-US', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+        });
+      }
+      return d.toLocaleString('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+      });
+    } catch (e) {
+      return value;
+    }
   }
 
   // Helper methods for password inputs (convert any type to string)

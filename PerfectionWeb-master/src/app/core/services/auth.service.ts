@@ -293,8 +293,15 @@ export class AuthService {
    */
   logout(): void {
     this.currentUser.set(null);
-    localStorage.removeItem(this.STORAGE_KEY);
-    localStorage.removeItem(this.REMEMBER_ME_KEY);
+    // Remove all auth-related persisted data to avoid auto-login
+    try {
+      localStorage.removeItem(this.STORAGE_KEY);
+      localStorage.removeItem(this.REMEMBER_ME_KEY);
+      localStorage.removeItem(this.PASSWORD_STORAGE_KEY);
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn('Warning clearing storage during logout', e);
+    }
   }
 
   /**

@@ -49,6 +49,7 @@ export class ExcelUploadComponent {
   uploadResult = signal<UploadResponse | null>(null);
   uploadError = signal<string | null>(null);
   detailedErrors = signal<string[]>([]);
+  showFullErrors = signal<boolean>(false);
 
   constructor(
     private location: Location,
@@ -139,17 +140,35 @@ export class ExcelUploadComponent {
       )
       .subscribe({
         next: (response) => {
-          console.log('✓ Upload successful:', response);
+          console.log('✓ Upload response:', response);
           this.isUploading.set(false);
           this.uploadProgress.set(100);
           this.uploadResult.set(response);
+
           // Show detailed errors if any
           if (response.errors && response.errors.length > 0) {
             this.detailedErrors.set(response.errors.slice(0, 10)); // Show first 10 errors
           }
-          if (response.success) {
-            // Reset form on success
+
+          // Treat upload as successful if at least one record was updated
+          const updated = response.updated_count || 0;
+          const total = response.total_records || 0;
+          const errorCount = response.error_count || (response.errors ? response.errors.length : 0);
+
+          if (updated > 0) {
+            // If more than half failed, surface a warning but keep uploaded records
+            if (errorCount > Math.floor(total / 2)) {
+              this.uploadError.set(`Partial upload: ${updated}/${total} succeeded, ${errorCount} failed`);
+            } else {
+              this.uploadError.set(null);
+            }
+            // Reset form (we consider partial success acceptable)
             this.resetForm();
+          } else {
+            // No records uploaded - prefer message, otherwise join returned errors if any
+            const joinedErrors = response.errors && response.errors.length ? response.errors.slice(0, 10).join(' | ') : null;
+            const msg = response.message || joinedErrors || 'No records were uploaded';
+            this.uploadError.set(msg);
           }
         },
         error: (error) => {
@@ -207,6 +226,30 @@ export class ExcelUploadComponent {
     this.lang.set(newLang);
     document.documentElement.lang = newLang;
     document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+  }
+
+  // Toggle showing full error list returned by backend
+  toggleFullErrors(): void {
+    this.showFullErrors.set(!this.showFullErrors());
+  }
+
+  // Download full error log as a text file (useful for debugging failed rows)
+  downloadErrors(): void {
+    const res = this.uploadResult();
+    if (!res || !res.errors || res.errors.length === 0) {
+      return;
+    }
+    const content = res.errors.join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const filename = `upload_errors_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   }
 }
 

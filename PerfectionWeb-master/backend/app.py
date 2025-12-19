@@ -7,12 +7,27 @@ from supabase import create_client, Client
 import pandas as pd
 from datetime import datetime
 import traceback
+import re
+from dateutil import parser as date_parser
+import logging
+from logging.handlers import RotatingFileHandler
+from collections import deque
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Angular frontend
+
+# Logging configuration
+LOG_FILE = os.path.join(os.path.dirname(__file__), 'uploads.log')
+logger = logging.getLogger('upload_logger')
+logger.setLevel(logging.INFO)
+handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.propagate = False
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
@@ -79,6 +94,69 @@ def normalize_phone(phone: str) -> str:
             return '0' + last10
 
     return cleaned
+
+
+def normalize_timestamp(value):
+    """
+    Normalize various timestamp inputs into a Postgres-friendly ISO string 'YYYY-MM-DD HH:MM:SS'.
+    Handles:
+      - Python datetimes
+      - Strings with Arabic AM/PM markers (ص => AM, م => PM)
+      - Common ambiguous formats (try dayfirst=True then False)
+    Returns None when value is falsy.
+    """
+    if not value:
+        return None
+
+    # If already a datetime, return formatted string
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+
+    s = str(value).strip()
+    if not s:
+        return None
+
+    # Remove Unicode directionality marks and non-printable chars
+    s = s.replace('\u200f', ' ').replace('\u200e', ' ')
+
+    # Replace Arabic AM/PM markers with English equivalents
+    # Arabic AM = 'ص' (U+0635), Arabic PM = 'م' (U+0645)
+    s = s.replace('ص', ' AM').replace('م', ' PM')
+
+    # Normalize whitespace
+    s = re.sub(r'\s+', ' ', s).strip()
+
+    # Try parsing with dayfirst True, then False
+    for dayfirst in (True, False):
+        try:
+            dt = date_parser.parse(s, dayfirst=dayfirst)
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            continue
+
+    # As a last resort return the original string (DB may still reject it)
+    return s
+
+
+def format_start_time_arabic(value):
+    """Format a datetime-like value into DD/MM/YYYY HH:MM:SS plus Arabic AM/PM marker (ص for AM, م for PM)."""
+    if not value:
+        return ''
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            dt = date_parser.parse(str(value))
+
+        date_part = dt.strftime('%d/%m/%Y %H:%M:%S')
+        arabic_marker = 'ص' if dt.hour < 12 else 'م'
+        return f"{date_part} {arabic_marker}"
+    except Exception:
+        # If parsing fails, return original string
+        try:
+            return str(value)
+        except:
+            return ''
 
 def parse_general_exam_sheet(file_path):
     """
@@ -185,7 +263,7 @@ def parse_general_exam_sheet(file_path):
                 records.append(record)
             except Exception as e:
                 # Skip rows with errors but continue processing
-                print(f"Warning: Error processing row {row.get(id_col, 'unknown')}: {str(e)}")
+                logger.warning(f"Error processing row {row.get(id_col, 'unknown')}: {str(e)}")
                 continue
         
         return records
@@ -262,7 +340,7 @@ def parse_normal_lecture_sheet(file_path):
                             if not start_time:
                                 start_time = None
                     except Exception as time_error:
-                        print(f"Warning parsing time for {row[id_col]}: {str(time_error)}")
+                        logger.warning(f"Warning parsing time for {row[id_col]}: {str(time_error)}")
                         start_time = None
                 
                 # Handle parent_no conversion (CRITICAL - must not be empty if provided)
@@ -332,7 +410,7 @@ def parse_normal_lecture_sheet(file_path):
                 records.append(record)
             except Exception as e:
                 # Skip rows with errors but continue processing
-                print(f"Warning: Error processing row {row.get(id_col, 'unknown')}: {str(e)}")
+                logger.warning(f"Error processing row {row.get(id_col, 'unknown')}: {str(e)}")
                 continue
         
         return records
@@ -352,7 +430,6 @@ def create_or_update_parent(parent_no, student_name=None):
     try:
         # Check if parent exists
         existing = supabase.table('parents').select('*').eq('phone_number', parent_no_norm).execute()
-        
         if existing.data and len(existing.data) > 0:
             # Parent exists, no need to update
             return
@@ -364,10 +441,15 @@ def create_or_update_parent(parent_no, student_name=None):
                 'needs_password_reset': True,
                 'name': student_name or f'Parent {parent_no_norm}'
             }
-            supabase.table('parents').insert(parent_data).execute()
+            try:
+                res = supabase.table('parents').insert(parent_data).execute()
+                if getattr(res, 'error', None):
+                    logger.warning(f"Could not create parent {parent_no_norm}: {res.error}")
+            except Exception as e:
+                logger.exception(f"Exception creating parent {parent_no_norm}: {str(e)}")
     except Exception as e:
         # Silently fail parent creation - don't block the main upload
-        print(f"Warning: Could not create parent account for {parent_no}: {str(e)}")
+        logger.warning(f"Could not create parent account for {parent_no}: {str(e)}")
 
 def update_database(records, session_number, quiz_mark, finish_time, group, is_general_exam, lecture_name='', exam_name='', has_exam_grade=True, has_payment=True, has_time=True):
     """
@@ -411,10 +493,20 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                     db_data['quiz_mark'] = float(record.get('quiz_mark'))
                 
                 if finish_time:
-                    db_data['finish_time'] = finish_time
-                
+                    # Normalize finish_time to a Postgres-friendly format
+                    try:
+                        normalized_finish = normalize_timestamp(finish_time)
+                        db_data['finish_time'] = normalized_finish if normalized_finish else finish_time
+                    except Exception:
+                        db_data['finish_time'] = finish_time
+
                 if record.get('start_time'):
-                    db_data['start_time'] = record.get('start_time')
+                    # Normalize start_time from the parsed record (handles Arabic AM/PM, etc.)
+                    try:
+                        normalized_start = normalize_timestamp(record.get('start_time'))
+                        db_data['start_time'] = normalized_start if normalized_start else record.get('start_time')
+                    except Exception:
+                        db_data['start_time'] = record.get('start_time')
                 
                 if record.get('homework_status') is not None:
                     db_data['homework_status'] = int(record.get('homework_status'))
@@ -425,14 +517,43 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                 if record.get('student_no'):
                     db_data['student_no'] = str(record.get('student_no')).strip()
                 
-                # Insert record - no validation, just insert everything
-                supabase.table('session_records').insert(db_data).execute()
-                updated_count += 1
+                # Try to insert record; handle Supabase response errors (client may not raise)
+                try:
+                    insert_res = supabase.table('session_records').insert(db_data).execute()
+                    insert_error = getattr(insert_res, 'error', None)
+                    if not insert_error:
+                        updated_count += 1
+                        logger.info(f"Inserted record for {student_id} (session {session_number}, group {group})")
+                    else:
+                        error_msg = insert_error.get('message') if isinstance(insert_error, dict) else str(insert_error)
+                        logger.warning(f"Insert returned error for {student_id}: {error_msg}")
+                        # Check for duplicate key constraint
+                        if '23505' in str(error_msg) or 'duplicate' in str(error_msg).lower() or 'unique' in str(error_msg).lower():
+                            try:
+                                update_res = supabase.table('session_records').update(db_data).eq('student_id', student_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
+                                update_error = getattr(update_res, 'error', None)
+                                if not update_error:
+                                    updated_count += 1
+                                    logger.info(f"Updated duplicate record for {student_id}")
+                                else:
+                                    ue_msg = update_error.get('message') if isinstance(update_error, dict) else str(update_error)
+                                    errors.append(f"Row {student_id}: {ue_msg}")
+                                    logger.error(f"Update failed for {student_id}: {ue_msg}")
+                            except Exception as update_err:
+                                errors.append(f"Row {student_id}: {str(update_err)}")
+                                logger.exception(f"Update exception for {student_id}: {str(update_err)}")
+                        else:
+                            errors.append(f"Row {student_id}: {error_msg}")
+                except Exception as e:
+                    # Exception from Supabase client call
+                    err_text = str(e)
+                    errors.append(f"Row {student_id}: {err_text}")
+                    logger.exception(f"Insert exception for {student_id}: {err_text}")
                     
             except Exception as e:
                 errors.append(str(e))
         
-        print(f"✅ Uploaded {updated_count}/{len(records)} records")
+        logger.info(f"Upload summary: {updated_count}/{len(records)} records uploaded, {len(errors)} errors")
         return updated_count, errors
     except Exception as e:
         raise Exception(f"Error updating database: {str(e)}")
@@ -478,6 +599,9 @@ def upload_excel():
         group = request.form.get('group')
         is_general_exam = request.form.get('is_general_exam', 'false').lower() == 'true'
         lecture_name = request.form.get('lecture_name', '').strip()
+        # Optional: allow passing a lecture unique key which maps to a lecture_name
+        # If `lecture_name` is missing, we will try to resolve it via `lecture_key` lookup
+        lecture_key = request.form.get('lecture_key', '').strip()
         exam_name = request.form.get('exam_name', '').strip()
         has_exam_grade = request.form.get('has_exam_grade', 'true').lower() == 'true'
         has_payment = request.form.get('has_payment', 'true').lower() == 'true'
@@ -519,6 +643,15 @@ def upload_excel():
             if not records:
                 return jsonify({'error': 'No records found in Excel file'}), 400
             
+            # If lecture_name not provided but lecture_key exists, lookup lecture_name from `lectures` table
+            if not lecture_name and lecture_key:
+                try:
+                    lookup = supabase.table('lectures').select('lecture_name').eq('unique_key', lecture_key).limit(1).execute()
+                    if lookup.data and len(lookup.data) > 0:
+                        lecture_name = lookup.data[0].get('lecture_name', '') or lecture_name
+                except Exception as e:
+                    logger.warning(f"Could not resolve lecture_key {lecture_key}: {str(e)}")
+
             # Update database
             updated_count, errors = update_database(
                 records, 
@@ -541,13 +674,24 @@ def upload_excel():
                 'success': True,
                 'message': f'Successfully processed {updated_count} records',
                 'updated_count': updated_count,
-                'total_records': len(records)
+                'total_records': len(records),
+                'partial': False
             }
-            
+
             if errors:
                 response['errors'] = errors
                 response['error_count'] = len(errors)
-            
+                # If some records succeeded but some failed, mark as partial
+                if updated_count > 0:
+                    response['partial'] = True
+                    response['message'] = f'Processed {updated_count}/{len(records)} records with {len(errors)} errors'
+                    response['success'] = True
+                else:
+                    # All records failed
+                    response['partial'] = False
+                    response['success'] = False
+                    response['message'] = f'All records failed: {len(errors)} errors'
+
             return jsonify(response), 200
             
         except Exception as e:
@@ -666,14 +810,17 @@ def get_parent_sessions():
             has_time = r.get('has_time', True)
             
             # Build session object, filtering based on admin flags
+            # Format start_time to DD/MM/YYYY HH:MM:SS plus Arabic AM/PM marker
+            formatted_start = format_start_time_arabic(r.get('start_time') or r.get('startTime') or r.get('start_time'))
+
             session = {
                 'id': r.get('id') or r.get('student_no') or r.get('student_id'),
                 'chapter': r.get('session_number'),
                 'name': r.get('lecture_name') or r.get('exam_name') or r.get('student_name') or f"Session {r.get('session_number')}",
                 'lectureName': r.get('lecture_name') or r.get('exam_name'),
                 'date': r.get('finish_time') or '',
-                'startTime': r.get('start_time') or '',
-                'start_time': r.get('start_time') or '',
+                'startTime': formatted_start,
+                'start_time': formatted_start,
                 'attendance': 'attended' if int(r.get('attendance') or 0) == 1 else 'missed',
                 'homeworkStatus': 'completed' if (r.get('homework_status') in (0, None)) else 'pending'
             }
@@ -789,7 +936,7 @@ def login():
         
         if not result.data or len(result.data) == 0:
             # Parent doesn't exist, create a new one with default password
-            print(f"📝 Creating new parent account for {phone_number}")
+            logger.info(f"Creating new parent account for {phone_number}")
             try:
                 parent_data = {
                     'phone_number': phone_number,
@@ -800,11 +947,11 @@ def login():
                 create_result = supabase.table('parents').insert(parent_data).execute()
                 if create_result and create_result.data:
                     parent = create_result.data[0]
-                    print(f"✓ Parent account created for {phone_number}")
+                    logger.info(f"Parent account created for {phone_number}")
                 else:
                     return jsonify({'success': False, 'message': 'Failed to create parent account'}), 500
             except Exception as create_error:
-                print(f"❌ Error creating parent: {str(create_error)}")
+                logger.exception(f"Error creating parent: {str(create_error)}")
                 return jsonify({'success': False, 'message': f'Error creating account: {str(create_error)}'}), 500
         else:
             parent = result.data[0]
@@ -831,7 +978,7 @@ def login():
         }), 200
         
     except Exception as e:
-        print(f"❌ Login error: {str(e)}")
+        logger.exception(f"Login error: {str(e)}")
         return jsonify({'success': False, 'message': f'Login error: {str(e)}'}), 500
 
 
@@ -938,7 +1085,7 @@ def change_password():
                     }), 200
             except Exception as hash_error:
                 # If password_hash fails, try password column instead
-                print(f"password_hash update failed, trying password column: {str(hash_error)}")
+                logger.warning(f"password_hash update failed, trying password column: {str(hash_error)}")
                 try:
                     update_result = supabase.table('parents').update({
                         'password': new_password
@@ -950,7 +1097,7 @@ def change_password():
                             'message': 'Password changed successfully'
                         }), 200
                 except Exception as password_error:
-                    print(f"password update failed: {str(password_error)}")
+                    logger.exception(f"password update failed: {str(password_error)}")
                     raise password_error
             
             # If we get here, something went wrong
@@ -960,14 +1107,11 @@ def change_password():
             }), 500
         except Exception as update_error:
             error_msg = str(update_error)
-            print(f"Database update error: {error_msg}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"Database update error: {error_msg}")
             return jsonify({'success': False, 'message': f'Database error: {error_msg}'}), 500
         
     except Exception as e:
-        print(f"Change password error: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception(f"Change password error: {str(e)}")
         return jsonify({'success': False, 'message': f'Error changing password: {str(e)}'}), 500
         
         # Update password (in production, hash the password)
@@ -1059,14 +1203,14 @@ def admin_change_password():
                         return jsonify({'success': True, 'message': 'Password changed successfully'}), 200
                 except Exception as hash_error:
                     # If password_hash fails, try password column instead
-                    print(f"Admin password_hash update failed, trying password column: {str(hash_error)}")
+                    logger.warning(f"Admin password_hash update failed, trying password column: {str(hash_error)}")
                     try:
                         update_result = supabase.table('admins').update({'password': new_password}).eq('username', username).execute()
                         
                         if update_result and update_result.data:
                             return jsonify({'success': True, 'message': 'Password changed successfully'}), 200
                     except Exception as password_error:
-                        print(f"Admin password update failed: {str(password_error)}")
+                        logger.exception(f"Admin password update failed: {str(password_error)}")
                         raise password_error
                 
                 # If we get here, something went wrong
@@ -1076,18 +1220,35 @@ def admin_change_password():
                 }), 500
             except Exception as update_error:
                 error_msg = str(update_error)
-                print(f"Admin password update error: {error_msg}")
-                import traceback
-                traceback.print_exc()
+                logger.exception(f"Admin password update error: {error_msg}")
                 return jsonify({'success': False, 'message': f'Database error: {error_msg}'}), 500
         except Exception as e:
-            print(f"Admin change password error: {str(e)}")
-            print(traceback.format_exc())
+            logger.exception(f"Admin change password error: {str(e)}")
             return jsonify({'success': False, 'message': f'Error changing admin password: {str(e)}'}), 500
     except Exception as e:
-        print(f"Admin change password outer error: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception(f"Admin change password outer error: {str(e)}")
         return jsonify({'success': False, 'message': f'Admin change password error: {str(e)}'}), 500
+
+
+@app.route('/api/upload-log', methods=['GET'])
+def get_upload_log():
+    """Return last N lines from the uploads.log file for debugging."""
+    try:
+        lines = int(request.args.get('lines', 200))
+    except:
+        lines = 200
+
+    try:
+        if not os.path.exists(LOG_FILE):
+            return jsonify({'error': 'Log file not found', 'lines': []}), 404
+
+        with open(LOG_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+            last = list(deque(f, maxlen=lines))
+
+        return jsonify({'lines': last, 'count': len(last)}), 200
+    except Exception as e:
+        logger.exception(f"Error reading log file: {str(e)}")
+        return jsonify({'error': f'Error reading log file: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

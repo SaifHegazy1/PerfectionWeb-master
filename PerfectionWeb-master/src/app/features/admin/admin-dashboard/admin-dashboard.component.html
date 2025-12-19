@@ -10,7 +10,7 @@
 
   <!-- Center Top Navigation -->
   <div class="fixed top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-3 z-20">
-    <button type="button" (click)="handleLogout()" class="flex items-center gap-2 px-4 py-2 bg-red-500/30 backdrop-blur-sm rounded-lg 
+    <button *ngIf="false" type="button" (click)="handleLogout()" class="flex items-center gap-2 px-4 py-2 bg-red-500/30 backdrop-blur-sm rounded-lg 
              text-red-300 hover:bg-red-500/50 transition-all duration-200" title="Logout">
       <lucide-angular [img]="LogOut" class="w-5 h-5"></lucide-angular>
       <span class="text-sm font-medium">{{ lang() === 'en' ? 'Logout' : 'تسجيل' }}</span>
@@ -19,6 +19,15 @@
     <button type="button" (click)="toggleLanguage()" class="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
              text-white hover:bg-white/30 transition-all duration-200 text-sm font-medium">
       {{ lang() === 'en' ? 'EN' : 'ع/AR' }}
+    </button>
+  </div>
+
+  <!-- Bottom-left persistent logout for admin (ensures logout always reachable) -->
+  <div style="position:fixed; left:16px; bottom:16px; z-index:9999; pointer-events:auto;">
+    <button id="logout-bottom-admin" (click)="handleLogout()" title="Logout"
+      style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#ef4444;color:white;border-radius:8px;border:none;box-shadow:0 4px 14px rgba(0,0,0,0.2);">
+      <lucide-angular [img]="LogOut" class="w-4 h-4" aria-hidden="true"></lucide-angular>
+      <span style="font-size:13px;font-weight:600">{{ lang() === 'en' ? 'Logout' : 'تسجيل الخروج' }}</span>
     </button>
   </div>
 

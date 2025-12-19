@@ -145,10 +145,20 @@ export class AdminDashboardComponent implements OnInit {
         if (success) {
           console.log('✓ Successfully navigated to login');
         } else {
-          console.error('✗ Failed to navigate to login');
+          console.error('✗ Failed to navigate to login - falling back to full page redirect');
+          try {
+            window.location.replace('/login');
+          } catch (e) {
+            console.error('Fallback redirect failed', e);
+          }
         }
       }).catch(err => {
         console.error('✗ Navigation error:', err);
+        try {
+          window.location.replace('/login');
+        } catch (e) {
+          console.error('Fallback redirect failed', e);
+        }
       });
     } catch (error) {
       console.error('✗ Logout error:', error);

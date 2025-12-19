@@ -154,11 +154,27 @@
           <p>📊 Total: {{ uploadResult()?.total_records }} records</p>
           @if (uploadResult()?.error_count !== undefined && uploadResult()!.error_count! > 0) {
           <p class="error-count">❌ Errors: {{ uploadResult()?.error_count }}</p>
+          <div class="error-actions" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <button type="button" class="btn btn-ghost" (click)="downloadErrors()">Download full error log</button>
+            <button type="button" class="btn btn-ghost" (click)="toggleFullErrors()">{{ showFullErrors() ? 'Hide' :
+              'Show' }} all errors</button>
+          </div>
           @if (detailedErrors().length > 0) {
           <div class="error-list">
             <p class="text-sm font-medium mb-2">First errors encountered:</p>
             <ul class="text-xs space-y-1">
               @for (err of detailedErrors(); track $index) {
+              <li>• {{ err }}</li>
+              }
+            </ul>
+          </div>
+          }
+          @if (showFullErrors() && uploadResult()?.errors && uploadResult()!.errors!.length > 0) {
+          <div class="full-error-panel"
+            style="margin-top:10px;background:#111827/60;padding:10px;border-radius:8px;max-height:240px;overflow:auto;">
+            <p class="text-sm font-medium mb-2">All errors ({{ uploadResult()?.errors?.length }}):</p>
+            <ul class="text-xs space-y-1">
+              @for (err of uploadResult()!.errors!; track $index) {
               <li>• {{ err }}</li>
               }
             </ul>
