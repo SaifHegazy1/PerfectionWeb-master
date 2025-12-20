@@ -77,15 +77,12 @@
           {{ lang() === 'en' ? 'SELECT STUDENT' : 'اختر الطالب' }}
         </label>
         <div class="select-container">
-          <!-- <select
-            id="student-select"
-            (change)="onStudentChange($event)" 
-            class="student-select"
-          >
+          <select id="student-select" class="student-select" [(ngModel)]="selectedStudentId"
+            (ngModelChange)="onStudentChange($event)">
             <option *ngFor="let student of students()" [value]="student.id">
               {{ student.name }}
             </option>
-          </select> -->
+          </select>
           <lucide-angular [img]="ChevronDown" class="select-arrow"></lucide-angular>
         </div>
       </div>
@@ -106,11 +103,7 @@
               <div class="hero-stats-pills">
                 <span class="stat-pill">
                   <lucide-angular [img]="Calendar" class="pill-icon"></lucide-angular>
-                  5 Sessions
-                </span>
-                <span class="stat-pill">
-                  <lucide-angular [img]="TrendingUp" class="pill-icon"></lucide-angular>
-                  88% Avg
+                  {{ sessionCount() }} {{ sessionCount() === 1 ? 'Session' : 'Sessions' }}
                 </span>
               </div>
               <div class="location-pill">
@@ -140,19 +133,18 @@
         </div>
 
         <!-- Shamel Grade Panel -->
-        <div class="shamel-panel">
+        <div *ngIf="hasShamelData()" class="shamel-panel">
           <div class="shamel-section shamel-current">
             <div class="section-header">
               <lucide-angular [img]="Trophy" class="header-icon"></lucide-angular>
-              <span class="header-label">{{ lang() === 'en' ? 'CURRENT SHAMEL GRADE / GENERAL EXAM' : 'درجة الشامل
-                الحالية / الامتحان العام' }}</span>
+              <span class="header-label">{{ lang() === 'en' ? 'CURRENT SHAMEL GRADE / GENERAL EXAM' : 'درجة الشامل الحالية / الامتحان العام' }}</span>
               <span class="date-badge">December 2025</span>
             </div>
             <div class="shamel-grade-display">
               <div class="grade-numbers">
                 <span class="grade-score">{{ getCurrentShamel().score }}</span>
                 <span class="grade-separator">/</span>
-                <span class="grade-total">{{ 60 }}</span>
+                <span class="grade-total">{{ getCurrentShamel().total }}</span>
               </div>
               <p class="grade-subtitle">{{ getCurrentShamel().label || 'Comprehensive Assessment' }}</p>
             </div>
@@ -163,11 +155,9 @@
                   [style.stroke-dashoffset]="(getCurrentShamel().total ? (377 - (377 * (getCurrentShamel().score / getCurrentShamel().total))) : 377)">
                 </circle>
               </svg>
-              <div class="progress-text">{{ getCurrentShamel().total ? (Math.round((getCurrentShamel().score /
-                getCurrentShamel().total) * 100) + '%') : '0%' }}</div>
+              <div class="progress-text">{{ getCurrentShamel().total ? (Math.round((getCurrentShamel().score / getCurrentShamel().total) * 100) + '%') : '0%' }}</div>
             </div>
           </div>
-
         </div>
 
       </div>
@@ -175,67 +165,52 @@
       <!-- Statistics Cards Row -->
       <div class="stats-row">
         <!-- Attendance Card -->
-        <div class="stat-card">
+        <div class="stat-card attendance-card">
           <div class="stat-icon-wrapper attendance-icon">
             <lucide-angular [img]="Calendar" class="stat-icon"></lucide-angular>
           </div>
           <div class="stat-content">
             <p class="stat-label">{{ lang() === 'en' ? 'ATTENDANCE RATE' : 'معدل الحضور' }}</p>
-            <p class="stat-value">{{ selectedStudent()!.attendance }}%</p>
-            <p class="stat-detail">4/5 sessions</p>
+            <p class="stat-value">{{ getAttendancePercentage() }}%</p>
+            <p class="stat-detail">{{ attendedCount() }}/{{ sessionCount() }} sessions</p>
           </div>
           <div class="stat-visual">
             <svg viewBox="0 0 100 100" class="ring-svg">
               <circle cx="50" cy="50" r="40" class="ring-bg"></circle>
               <circle cx="50" cy="50" r="40" class="ring-fill attendance-ring"
-                [style.stroke-dashoffset]="251 - (251 * selectedStudent()!.attendance / 100)"></circle>
+                [style.stroke-dashoffset]="251 - (251 * getAttendancePercentage() / 100)"></circle>
             </svg>
           </div>
           <div class="stat-progress-bar">
-            <div class="progress-fill attendance-fill" [style.width.%]="selectedStudent()!.attendance"></div>
+            <div class="progress-fill attendance-fill" [style.width.%]="getAttendancePercentage()"></div>
           </div>
         </div>
 
         <!-- Payment Card -->
-        <div class="stat-card">
+        <div class="stat-card payment-card">
           <div class="stat-icon-wrapper payment-icon">
             <lucide-angular [img]="DollarSign" class="stat-icon"></lucide-angular>
           </div>
           <div class="stat-content">
-            <p class="stat-label">{{ lang() === 'en' ? 'PAYMENT STATUS' : 'حالة الدفع' }}</p>
-            <p class="stat-value payment-value">{{ getPaymentPercentage() }} EGP</p>
-            <p class="stat-detail">{{ selectedStudent()!.payments.paid }} / {{ selectedStudent()!.payments.total }}
-              EGP</p>
-          </div>
-          <div class="stat-visual">
-            <svg viewBox="0 0 100 100" class="ring-svg">
-              <circle cx="50" cy="50" r="40" class="ring-bg"></circle>
-              <circle cx="50" cy="50" r="40" class="ring-fill payment-ring"
-                [style.stroke-dashoffset]="251 - (251 * getPaymentPercentage() / 100)"></circle>
-            </svg>
-          </div>
-          <div class="stat-progress-bar">
-            <div class="progress-fill payment-fill" [style.width.%]="getPaymentPercentage()"></div>
+            <p class="stat-label">{{ lang() === 'en' ? 'TOTAL PAYMENT' : 'إجمالي الدفع' }}</p>
+            <p class="stat-value payment-value">{{ getTotalPayment() }}</p>
+            <p class="stat-detail">EGP</p>
           </div>
         </div>
 
         <!-- Quiz Performance Card -->
-        <div class="stat-card">
+        <div class="stat-card quiz-card">
           <div class="stat-icon-wrapper quiz-icon">
             <lucide-angular [img]="GraduationCap" class="stat-icon"></lucide-angular>
           </div>
           <div class="stat-content">
             <p class="stat-label">{{ lang() === 'en' ? 'QUIZ PERFORMANCE' : 'أداء الاختبار' }}</p>
-            <p class="stat-value">{{ selectedStudent()!.quizzes.average }}%</p>
-            <p class="stat-detail">Across all sessions</p>
+            <p class="stat-value">{{ getQuizPerformance() }}%</p>
+            <p class="stat-detail">{{ getQuizDetails().correct }}/{{ getQuizDetails().total }} correct</p>
           </div>
           <div class="stat-visual">
             <div class="bar-chart">
-              <div class="bar" [style.height.%]="92"></div>
-              <div class="bar" [style.height.%]="85"></div>
-              <div class="bar" [style.height.%]="88"></div>
-              <div class="bar" [style.height.%]="95"></div>
-              <div class="bar" [style.height.%]="80"></div>
+              <div class="bar" [style.height.%]="getQuizPerformance()"></div>
             </div>
           </div>
         </div>
@@ -251,10 +226,6 @@
               <p class="section-subtitle">Detailed record of all physics sessions</p>
             </div>
           </div>
-          <button class="filter-btn">
-            <lucide-angular [img]="Filter" class="btn-icon"></lucide-angular>
-            Filter
-          </button>
         </div>
 
         <!-- Session Cards Carousel -->
@@ -264,15 +235,17 @@
           </button>
 
           <div class="session-cards" #sessionCarousel>
-            <div *ngFor="let session of sessions()" class="session-card">
+            <div *ngFor="let session of sessions()" class="session-card" [class.general-exam-card]="session.is_general_exam">
               <!-- Session Header -->
               <div class="session-header">
-                <div class="session-icon-wrapper">
-                  <lucide-angular [img]="Zap" class="session-icon"></lucide-angular>
+                <div class="session-icon-wrapper" [class.general-exam-icon]="session.is_general_exam">
+                  <lucide-angular [img]="session.is_general_exam ? Trophy : Zap" class="session-icon"></lucide-angular>
                 </div>
                 <div class="session-title-group">
-                  <h4 class="session-title">{{ session.lectureName || ('Session #' + session.id + ' • Chapter ' +
-                    session.chapter) }}</h4>
+                  <h4 class="session-title">
+                    <span *ngIf="session.is_general_exam" class="exam-badge">🏆 GENERAL EXAM</span>
+                    {{ session.lectureName || ('Session #' + session.id + ' • Chapter ' + session.chapter) }}
+                  </h4>
                   <p class="session-topic">{{ session.name }}</p>
                 </div>
                 <span class="status-badge" [ngClass]="session.attendance">

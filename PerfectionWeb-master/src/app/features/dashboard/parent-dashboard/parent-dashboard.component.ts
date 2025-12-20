@@ -44,6 +44,8 @@ export interface Session {
   adminQuizMark?: number;
   payment: number;
   homeworkStatus: 'completed' | 'pending';
+  is_general_exam?: boolean;
+  isGeneralExam?: boolean;
 }
 
 @Component({
@@ -83,13 +85,20 @@ export class ParentDashboardComponent implements OnInit {
   // Math reference for template
   Math = Math;
 
+  // Session counters
+  sessionCount = signal<number>(0);
+  attendedCount = signal<number>(0);
+  missedCount = signal<number>(0);
+
   // View references
   @ViewChild('sessionCarousel') sessionCarousel!: ElementRef<HTMLDivElement>;
 
   // Component state
   students = signal<Student[]>([]);
   selectedStudent = signal<Student | null>(null);
+  selectedStudentId = signal<string | null>(null);
   sessions = signal<Session[]>([]);
+  
   // Settings modal / change password
   showSettings = signal<boolean>(false);
   currentPassword = signal('');
@@ -107,35 +116,49 @@ export class ParentDashboardComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-    // Check if user is logged in
     if (!this.authService.isLoggedIn()) {
       this.router.navigate(['/login']);
       return;
     }
 
-    // Check if password reset is needed
     if (this.authService.needsPasswordReset()) {
       this.router.navigate(['/reset-password']);
       return;
     }
 
-    // Check if user is parent
     if (this.authService.getUserType() !== 'parent') {
       this.router.navigate(['/admin']);
       return;
     }
 
-    // Load student data
     this.loadStudents();
   }
 
   loadStudents(): void {
     this.studentService.getStudentsForParent().subscribe({
       next: (students) => {
-        this.students.set(students);
-        if (students.length > 0) {
-          this.selectedStudent.set(students[0]);
-          this.loadSessions(students[0].id);
+        console.log('📚 Raw students from backend:', students);
+        
+        // Deduplicate students by ID
+        const uniqueStudents = students.reduce((acc: Student[], current: Student) => {
+          const existing = acc.find(s => s.id === current.id);
+          if (!existing) {
+            acc.push(current);
+          } else {
+            console.log(`⚠️ Duplicate student found: ${current.name} (ID: ${current.id})`);
+          }
+          return acc;
+        }, []);
+        
+        console.log('✅ Unique students after deduplication:', uniqueStudents);
+        
+        this.students.set(uniqueStudents);
+        
+        if (uniqueStudents.length > 0) {
+          const first = uniqueStudents[0];
+          this.selectedStudent.set(first);
+          this.selectedStudentId.set(first.id);
+          this.loadSessions(first.id);
         }
       },
       error: (error) => {
@@ -144,39 +167,107 @@ export class ParentDashboardComponent implements OnInit {
     });
   }
 
-  loadSessions(studentId: string): void {
-    this.studentService.getSessionsForStudent(studentId).subscribe({
-      next: (sessions) => {
-        // Backend returns sessions in a compatible shape; set directly
-        this.sessions.set(sessions as Session[]);
-      },
-      error: (err) => {
-        console.error('Error loading sessions:', err);
-      }
-    });
-  }
-
-  /*onStudentChange(event: Event): void {
-    const selectElement = event.target as HTMLSelectElement;
-    const studentId = Number(selectElement.value);
-    const student = this.students().find(s => s.id === studentId);
+  onStudentChange(studentIdOrEvent: any): void {
+    const id = typeof studentIdOrEvent === 'string' ? studentIdOrEvent : String(studentIdOrEvent);
+    const student = this.students().find(s => s.id === id);
     if (student) {
       this.selectedStudent.set(student);
       this.loadSessions(student.id);
     }
   }
-*/
-  getPaymentPercentage(): number {
-    const student = this.selectedStudent();
-    if (!student) return 0;
-    const { paid, total } = student.payments;
-    return paid;
+
+  loadSessions(studentId: string): void {
+    this.studentService.getSessionsForStudent(studentId).subscribe({
+      next: (sessions) => {
+        console.log('📚 Raw sessions from backend:', sessions);
+        
+        this.sessions.set(sessions as Session[]);
+        
+        // Calculate session statistics
+        const total = sessions.length;
+        const attended = sessions.filter(s => s.attendance === 'attended').length;
+        const missed = sessions.filter(s => s.attendance === 'missed').length;
+        
+        this.sessionCount.set(total);
+        this.attendedCount.set(attended);
+        this.missedCount.set(missed);
+        
+        // Debug: Check for general exams
+        const generalExams = sessions.filter((s: any) => 
+          s.is_general_exam === true || s.isGeneralExam === true
+        );
+        console.log('🏆 General exams found:', generalExams);
+        
+        // Log each session's is_general_exam status
+        sessions.forEach((s: any, index: number) => {
+          console.log(`Session ${index + 1}:`, {
+            id: s.id,
+            name: s.name,
+            is_general_exam: s.is_general_exam,
+            isGeneralExam: s.isGeneralExam,
+            attendance: s.attendance
+          });
+        });
+      },
+      error: (err) => {
+        console.error('Error loading sessions:', err);
+        this.sessionCount.set(0);
+        this.attendedCount.set(0);
+        this.missedCount.set(0);
+      }
+    });
+  }
+
+  // Calculate attendance percentage
+  getAttendancePercentage(): number {
+    const total = this.sessionCount();
+    const attended = this.attendedCount();
+    if (total === 0) return 0;
+    return Math.round((attended / total) * 100);
+  }
+
+  // Get total paid amount from sessions
+  getTotalPayment(): number {
+    return this.sessions().reduce((sum, session) => sum + (session.payment || 0), 0);
+  }
+
+  // Calculate quiz performance percentage
+  getQuizPerformance(): number {
+    const sessions = this.sessions();
+    let totalCorrect = 0;
+    let totalQuestions = 0;
+
+    sessions.forEach(session => {
+      if (session.attendance === 'attended') {
+        totalCorrect += session.quizCorrect || 0;
+        totalQuestions += (session.adminQuizMark || session.quizTotal || 0);
+      }
+    });
+
+    if (totalQuestions === 0) return 0;
+    return Math.round((totalCorrect / totalQuestions) * 100);
+  }
+
+  // Get quiz details for display
+  getQuizDetails(): { correct: number; total: number } {
+    const sessions = this.sessions();
+    let totalCorrect = 0;
+    let totalQuestions = 0;
+
+    sessions.forEach(session => {
+      if (session.attendance === 'attended') {
+        totalCorrect += session.quizCorrect || 0;
+        totalQuestions += (session.adminQuizMark || session.quizTotal || 0);
+      }
+    });
+
+    return { correct: totalCorrect, total: totalQuestions };
   }
 
   scrollSessions(direction: 'left' | 'right'): void {
     if (!this.sessionCarousel) return;
 
-    const scrollAmount = 464; // card width (440) + gap (24)
+    const scrollAmount = 464;
     const container = this.sessionCarousel.nativeElement;
 
     if (direction === 'left') {
@@ -190,7 +281,6 @@ export class ParentDashboardComponent implements OnInit {
     try {
       console.log('🔓 Parent logout initiated');
       this.authService.logout();
-      // Prefer router navigation with replace to avoid back navigation, fallback to full reload
       this.router.navigate(['/login'], { replaceUrl: true }).then(success => {
         if (success) {
           console.log('✓ Navigated to login after logout');
@@ -208,7 +298,6 @@ export class ParentDashboardComponent implements OnInit {
     }
   }
 
-  // Expose login state to template
   isLoggedIn(): boolean {
     try {
       return this.authService.isLoggedIn();
@@ -217,7 +306,6 @@ export class ParentDashboardComponent implements OnInit {
     }
   }
 
-  // Open settings modal
   openSettings(): void {
     this.settingsMessage.set('');
     this.currentPassword.set('');
@@ -261,37 +349,54 @@ export class ParentDashboardComponent implements OnInit {
     });
   }
 
-  // Compute current shamel grade from sessions (prefer general exam session)
+  // Check if a specific session is a general exam
+  isGeneralExamSession(session: Session): boolean {
+    return (session as any).is_general_exam === true || (session as any).isGeneralExam === true;
+  }
+
+  // Check if student has general exam data
+  hasShamelData(): boolean {
+    const sessions = this.sessions();
+    console.log('Checking for Shamel data in sessions:', sessions);
+    
+    const exam = sessions.find(s => {
+      const isGeneralExam = (s as any).is_general_exam === true || (s as any).isGeneralExam === true;
+      const isAttended = s.attendance === 'attended';
+      console.log(`Session ${s.id}: is_general_exam=${isGeneralExam}, attendance=${s.attendance}`);
+      return isGeneralExam && isAttended;
+    });
+    
+    console.log('Found general exam:', exam);
+    return !!exam;
+  }
+
+  // Get current shamel grade from general exam session
   getCurrentShamel(): { score: number; total: number; label?: string } {
-    // Try to find a session that looks like a general exam
-    const exam = this.sessions().find(s => {
-      const name = (s.name || '').toLowerCase();
-      return name.includes('exam') || name.includes('shamel') || (s.quizTotal && s.quizTotal > 0 && s.attendance === 'attended');
+    const sessions = this.sessions();
+    const exam = sessions.find(s => {
+      const isGeneralExam = (s as any).is_general_exam === true || (s as any).isGeneralExam === true;
+      return isGeneralExam && s.attendance === 'attended';
     });
 
     if (exam) {
-      return { score: exam.quizCorrect || 0, total: exam.quizTotal || 0, label: exam.name };
+      const total = exam.adminQuizMark || exam.quizTotal || 60;
+      const score = exam.quizCorrect || 0;
+      console.log('Shamel grade:', { score, total, label: exam.name });
+      return { 
+        score, 
+        total, 
+        label: exam.name || exam.lectureName || 'General Exam'
+      };
     }
 
-    // Fallback to student quizzes average (map percentage to /60)
-    const student = this.selectedStudent();
-    if (student && student.quizzes && typeof student.quizzes.average === 'number') {
-      const avg = student.quizzes.average;
-      const total = 60;
-      const score = Math.round((avg / 100) * total);
-      return { score, total };
-    }
-
-    return { score: 0, total: 0 };
+    return { score: 0, total: 60, label: 'No exam data' };
   }
 
-  // Format timestamps to `MM/DD/YYYY hh:mm:ss AM/PM` (fallback to original if invalid)
   formatTimestamp(value?: string): string {
     if (!value) return '';
     try {
       const d = new Date(value);
       if (isNaN(d.getTime())) {
-        // Try parsing as local date string
         const parsed = Date.parse(value);
         if (isNaN(parsed)) return value;
         return new Date(parsed).toLocaleString('en-US', {
@@ -308,7 +413,6 @@ export class ParentDashboardComponent implements OnInit {
     }
   }
 
-  // Helper methods for password inputs (convert any type to string)
   onCurrentPasswordChange(value: any): void {
     this.currentPassword.set(String(value || ''));
   }
@@ -321,7 +425,6 @@ export class ParentDashboardComponent implements OnInit {
     this.confirmPassword.set(String(value || ''));
   }
 
-  // Simple language toggle
   toggleLanguage(): void {
     const next = this.lang() === 'en' ? 'ar' : 'en';
     this.lang.set(next);
