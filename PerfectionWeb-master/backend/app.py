@@ -602,48 +602,63 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                         updated_count += 1
                         logger.info(f"Inserted record for {student_id} (session {session_number}, group {group})")
                     else:
-                        error_msg = insert_error.get('message') if isinstance(insert_error, dict) else str(insert_error)
-                        logger.warning(f"Insert returned error for {student_id}: {error_msg}")
-                        # Check for duplicate key constraint
+                        # Log full error dict + payload for diagnostics
+                        try:
+                            logger.error("Insert error for %s: %s -- payload: %s", student_id, insert_error, db_data)
+                        except Exception:
+                            logger.error("Insert error for %s: %s", student_id, str(insert_error))
+
+                        # Normalize error message text for checks and append to errors
+                        error_msg = None
+                        try:
+                            error_msg = insert_error.get('message') if isinstance(insert_error, dict) else str(insert_error)
+                        except Exception:
+                            error_msg = str(insert_error)
+
+                        # Record detailed error for response
+                        errors.append(f"Row {student_id}: {error_msg} | payload: {db_data}")
+
+                        # Check for duplicate key constraint or unique violation and attempt updates
                         if '23505' in str(error_msg) or 'duplicate' in str(error_msg).lower() or 'unique' in str(error_msg).lower():
                             try:
+                                # Attempt targeted update by student_id
                                 update_res = supabase.table('session_records').update(db_data).eq('student_id', student_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
                                 update_error = getattr(update_res, 'error', None)
                                 if not update_error:
                                     updated_count += 1
                                     logger.info(f"Updated duplicate record for {student_id}")
+                                    # remove last error since we resolved it
+                                    if errors:
+                                        errors.pop()
                                 else:
                                     ue_msg = update_error.get('message') if isinstance(update_error, dict) else str(update_error)
-                                    errors.append(f"Row {student_id}: {ue_msg}")
-                                    logger.error(f"Update failed for {student_id}: {ue_msg}")
-                                    # If update by student_id failed, try by student_name (handles ID changes for same person)
+                                    logger.error(f"Update returned error for {student_id}: {ue_msg} -- payload: {db_data}")
+                                    # Try fallback name-based resolution
                                     try:
-                                        logger.info(f"Attempting to find existing record by name '{student_name}' for session {session_number}, group {group}")
+                                        logger.info(f"Attempting to find existing record by name '%s' for session %s, group %s", student_name, session_number, group)
                                         existing = supabase.table('session_records').select('student_id').eq('student_name', student_name).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).limit(1).execute()
-                                        if existing.data and len(existing.data) > 0:
+                                        if getattr(existing, 'data', None) and len(existing.data) > 0:
                                             old_id = existing.data[0].get('student_id')
                                             if old_id and old_id != student_id:
-                                                # Same person (by name), but different ID. Update the old record to use new ID.
-                                                logger.info(f"Found same person '{student_name}' with old ID '{old_id}', updating to new ID '{student_id}'")
+                                                logger.info("Found same person '%s' with old ID '%s', updating to new ID '%s'", student_name, old_id, student_id)
                                                 update_data = dict(db_data)
                                                 update_data['student_id'] = student_id
                                                 update_by_name = supabase.table('session_records').update(update_data).eq('student_id', old_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
                                                 update_name_error = getattr(update_by_name, 'error', None)
                                                 if not update_name_error:
                                                     updated_count += 1
-                                                    logger.info(f"Updated student ID from '{old_id}' to '{student_id}' for '{student_name}'")
-                                                    # Remove the error since we successfully updated
-                                                    errors.pop()
+                                                    logger.info("Updated student ID from '%s' to '%s' for '%s'", old_id, student_id, student_name)
+                                                    # remove last error since we resolved it
+                                                    if errors:
+                                                        errors.pop()
                                                 else:
                                                     name_err = update_name_error.get('message') if isinstance(update_name_error, dict) else str(update_name_error)
-                                                    logger.error(f"Name-based update failed for {student_name}: {name_err}")
+                                                    logger.error("Name-based update failed for %s: %s -- payload: %s", student_name, name_err, db_data)
                                     except Exception as name_err:
-                                        logger.warning(f"Name-based lookup/update exception for {student_name}: {str(name_err)}")
+                                        logger.exception("Name-based lookup/update exception for %s: %s", student_name, str(name_err))
                             except Exception as update_err:
-                                errors.append(f"Row {student_id}: {str(update_err)}")
-                                logger.exception(f"Update exception for {student_id}: {str(update_err)}")
-                        else:
-                            errors.append(f"Row {student_id}: {error_msg}")
+                                logger.exception("Update exception for %s: %s -- payload: %s", student_id, str(update_err), db_data)
+                                errors.append(f"Row {student_id}: Update exception: {str(update_err)} | payload: {db_data}")
                 except Exception as e:
                     # Exception from Supabase client call
                     err_text = str(e)
@@ -826,6 +841,16 @@ def get_parent_students():
     try:
         result = supabase.table('session_records').select('*').eq('parent_no', phone).execute()
         records = result.data or []
+        # Debug logging: report counts and sample flags
+        try:
+            total_records = len(records)
+            ge_count = sum(1 for rr in records if (rr.get('is_general_exam') in (True, 'true', 1) or str(rr.get('is_general_exam')).lower() == 'true'))
+            logger.info("Parent sessions fetch for %s: %d records, %d general_exam flags", phone, total_records, ge_count)
+            # Log first 5 records simplified
+            for sample in records[:5]:
+                logger.info("Sample record: id=%s student_id=%s student_name=%s is_general_exam=%s session_number=%s parent_no=%s", sample.get('id'), sample.get('student_id'), sample.get('student_name'), sample.get('is_general_exam'), sample.get('session_number'), sample.get('parent_no'))
+        except Exception:
+            logger.exception("Error logging parent session debug info")
 
         # Group by student_name (matches database UNIQUE constraint)
         students_map = {}
