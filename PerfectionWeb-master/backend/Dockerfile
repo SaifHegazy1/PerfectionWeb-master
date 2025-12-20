@@ -4,14 +4,24 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install basic build tools (only if a package needs to compile C extensions)
+# Install system dependencies for numpy/pandas binary wheels and PostgreSQL client
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential gcc libpq-dev \
+    && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    libatlas-base-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install binary wheels for numpy/pandas first to avoid source builds
+# Upgrade pip, setuptools, wheel to latest versions
 RUN python -m pip install --upgrade pip setuptools wheel
-RUN python -m pip install --prefer-binary --only-binary=:all: numpy pandas || python -m pip install numpy pandas
+
+# Install numpy and pandas from prebuilt binary wheels
+# Pin to versions known to have stable wheels for Python 3.11
+RUN python -m pip install numpy==1.26.4 pandas==2.1.2 --no-cache-dir
 
 # Copy requirements and install dependencies (remaining)
 COPY requirements.txt .
