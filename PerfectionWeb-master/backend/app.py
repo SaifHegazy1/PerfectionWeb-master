@@ -1128,37 +1128,64 @@ def change_password():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error updating password: {str(e)}'}), 500
 
-
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     """Admin login endpoint. Expects JSON: { username, password }"""
+    print("\n" + "="*80)
+    print("🔐 ADMIN LOGIN ATTEMPT STARTED")
+    print("="*80)
+    
     try:
         data = request.get_json() or {}
         username = (data.get('username') or '').strip()
         password = (data.get('password') or '').strip()
 
+        print(f"📝 Received data: {data}")
+        print(f"👤 Username: '{username}'")
+        print(f"🔑 Password: '{password}'")
+
         if not username or not password:
+            print("❌ Missing username or password")
             return jsonify({'success': False, 'message': 'Username and password are required'}), 400
 
-        # Try admins table first
-        try:
-            result = supabase.table('admins').select('*').eq('username', username).execute()
-            if result.data and len(result.data) > 0:
-                admin = result.data[0]
-                if admin.get('password_hash') == password:
-                    return jsonify({'success': True, 'user': {'username': admin.get('username'), 'name': admin.get('name', '')}}), 200
-                else:
-                    return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
-        except Exception:
-            # If admins table does not exist or query fails, fallthrough to default
-            pass
-
-        # Fallback: no admin record found
+        print(f"🔍 Querying Supabase for admin: {username}")
+        result = supabase.table('admins').select('*').eq('username', username).execute()
+        
+        print(f"📊 Query executed")
+        print(f"📊 Result type: {type(result)}")
+        print(f"📊 Result data: {result.data if hasattr(result, 'data') else 'NO DATA ATTRIBUTE'}")
+        
+        if result.data and len(result.data) > 0:
+            admin = result.data[0]
+            print(f"✅ Admin found: {admin}")
+            
+            if admin.get('password_hash') == password:
+                print("✅ Password match - Login successful!")
+                return jsonify({
+                    'success': True,
+                    'user': {
+                        'username': admin.get('username'),
+                        'name': admin.get('name', '')
+                    }
+                }), 200
+            else:
+                print(f"❌ Password mismatch!")
+                print(f"   Stored: '{admin.get('password_hash')}'")
+                print(f"   Provided: '{password}'")
+                return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+        else:
+            print("❌ No admin found with that username")
+            
         return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+        
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Admin login error: {str(e)}'}), 500
-
-
+        print(f"❌ EXCEPTION: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+    finally:
+        print("="*80 + "\n")
+    
 @app.route('/api/admin/change-password', methods=['POST'])
 def admin_change_password():
     """Admin change password. Expects JSON: { username, current_password, new_password }"""
