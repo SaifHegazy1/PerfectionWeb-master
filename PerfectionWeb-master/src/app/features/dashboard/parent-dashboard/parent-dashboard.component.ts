@@ -151,6 +151,7 @@ export class ParentDashboardComponent implements OnInit {
   onStudentChange(studentIdOrEvent: any): void {
     // ngModel will pass the selected id string
     const id = typeof studentIdOrEvent === 'string' ? studentIdOrEvent : String(studentIdOrEvent);
+    this.selectedStudentId.set(id);
     const student = this.students().find(s => s.id === id);
     if (student) {
       this.selectedStudent.set(student);
@@ -169,17 +170,6 @@ export class ParentDashboardComponent implements OnInit {
       }
     });
   }
-
-  /*onStudentChange(event: Event): void {
-    const selectElement = event.target as HTMLSelectElement;
-    const studentId = Number(selectElement.value);
-    const student = this.students().find(s => s.id === studentId);
-    if (student) {
-      this.selectedStudent.set(student);
-      this.loadSessions(student.id);
-    }
-  }
-*/
   getPaymentPercentage(): number {
     const student = this.selectedStudent();
     if (!student) return 0;
