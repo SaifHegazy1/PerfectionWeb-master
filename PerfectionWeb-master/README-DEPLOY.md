@@ -1,16 +1,19 @@
 # Deployment Guide: PerfectionWeb Frontend + Backend
 
-Complete step-by-step instructions to deploy the Angular frontend on Vercel and Flask backend on Render.
+Complete step-by-step instructions to deploy the Angular frontend on Vercel and Flask backend on Google Cloud Run (free tier).
 
 ## Architecture
 - **Frontend**: Vercel (static Angular build) → Serves parent/admin dashboards
-- **Backend**: Render (Python 3.x) → Handles Excel uploads, authentication, API
+- **Backend**: Google Cloud Run (containerized Python) → Handles Excel uploads, authentication, API
 - **Database**: Supabase (PostgreSQL) → Managed cloud database
 
 ## Prerequisites
 1. GitHub account with your repo pushed.
 2. Vercel account (free) at https://vercel.com
-3. Render account (free tier available) at https://render.com
+3. Google Cloud account (free tier) at https://cloud.google.com
+   - Create a new project
+   - Enable Cloud Run API
+   - Set up a service account with Editor role
 4. Supabase credentials (`SUPABASE_URL`, `SUPABASE_KEY`) from your project.
 
 ---
@@ -65,43 +68,65 @@ Click the deployment URL (e.g., `https://your-project.vercel.app`). You should s
 
 ---
 
-## PHASE 3: Backend to Render (10 min)
+## PHASE 3: Backend to Google Cloud Run (15 min)
 
-### 3.1 Create Render Service
-1. Go to https://render.com/dashboard
-2. Click **New** → **Web Service**
-3. **Connect Repository**: Choose your GitHub repo
-4. **Environment Path** (optional): Set to `backend` if repo root has both frontend + backend folders. If Render can't find `requirements.txt`, manually set the **Start Command** later.
-5. **Runtime**: Python 3
-6. **Build Command**: 
-   ```
-   pip install -r requirements.txt
-   ```
-7. **Start Command**:
-   ```
-   gunicorn app:app --bind 0.0.0.0:$PORT -w 4
-   ```
-8. **Environment Variables**: Add (via **Environment** tab):
-   - `SUPABASE_URL`: Your Supabase URL (e.g., `https://xxx.supabase.co`)
-   - `SUPABASE_KEY`: Your Supabase Key (anon public key)
-   - (Optional) `FLASK_ENV`: `production`
-9. Click **Create Web Service** — wait for build & deployment (3–5 min).
+### 3.1 Setup Google Cloud Project
+1. Go to https://console.cloud.google.com
+2. Create a new project or select existing
+3. Enable Cloud Run API:
+   - Search "Cloud Run" in search bar → click **Cloud Run**
+   - Click **Enable** if not already enabled
+4. Enable Artifact Registry API:
+   - Search "Artifact Registry" → click **Enable**
 
-### 3.2 Get Render Backend URL
-After deployment, copy the live URL from Render dashboard (e.g., `https://perfectionweb-backend.onrender.com`).
+### 3.2 Install gcloud CLI (if not already installed)
+From your machine:
+```bash
+# Windows: Download from https://cloud.google.com/sdk/docs/install-sdk
+# Or use chocolatey:
+choco install google-cloud-sdk
 
-### 3.3 Verify Backend
-In browser, visit: `https://<your-render-url>/api/health`
+# macOS:
+brew install google-cloud-sdk
+
+# After install, initialize:
+gcloud init
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### 3.3 Deploy Backend to Cloud Run
+From repo root, run:
+```bash
+cd backend
+gcloud run deploy perfectionweb-backend --source . --region us-central1 --allow-unauthenticated --set-env-vars SUPABASE_URL=<YOUR_URL>,SUPABASE_KEY=<YOUR_KEY>
+```
+
+Replace:
+- `<YOUR_URL>` with your Supabase URL (e.g., `https://xxx.supabase.co`)
+- `<YOUR_KEY>` with your Supabase anon key
+
+**First deployment takes 2–3 minutes.** Wait for:
+```
+Service [perfectionweb-backend] revision [XX] has been deployed...
+Service URL: https://perfectionweb-backend-xxxxx.run.app
+```
+
+### 3.4 Verify Backend
+Copy the **Service URL** from the output above and test in browser:
+```
+https://perfectionweb-backend-xxxxx.run.app/api/health
+```
 
 Expected response:
 ```json
 {"status":"ok", "message":"Flask backend is running"}
 ```
 
-If you see 404 or error:
-- Check **Logs** tab in Render dashboard for error messages.
-- Ensure `requirements.txt` exists and lists all dependencies.
-- Verify `SUPABASE_URL` and `SUPABASE_KEY` are set correctly.
+If error:
+- Check logs: `gcloud run logs read perfectionweb-backend --region us-central1 --limit 50`
+- Verify environment variables: `gcloud run services describe perfectionweb-backend --region us-central1`
+- Ensure `SUPABASE_URL` and `SUPABASE_KEY` are correctly set
 
 ---
 
@@ -110,7 +135,7 @@ If you see 404 or error:
 ### 4.1 Update Frontend API URL
 1. Go back to Vercel dashboard → Project **Settings** → **Environment Variables**
 2. Update `API_BASE_URL`:
-   - **Value**: `https://<your-render-url>` (replace `<your-render-url>` with Render service URL)
+   - **Value**: `https://perfectionweb-backend-xxxxx.run.app` (replace with your Cloud Run service URL from Phase 3.3)
    - Environments: Production
 3. Click **Save** → Redeploy:
    - **Deployments** → latest → **Redeploy**
@@ -119,7 +144,7 @@ If you see 404 or error:
 ### 4.2 Test Integration
 1. Open your Vercel frontend URL: `https://your-project.vercel.app/login`
 2. Login with a parent phone number + password.
-3. Navigate to parent dashboard → should see students and sessions loading from the Render backend.
+3. Navigate to parent dashboard → should see students and sessions loading from Cloud Run backend.
 4. Try uploading an Excel file (admin portal) — should succeed.
 
 ---
@@ -155,9 +180,9 @@ If you see 404 or error:
 - Verify `dist/prefectionweb/` is created (Angular default output folder).
 
 ### 404 on /api/upload-excel
-- Ensure Render backend is live (not sleeping).
-- Check Render **Logs** for Flask startup errors.
-- Verify `SUPABASE_URL` and `SUPABASE_KEY` are correct.
+- Ensure Cloud Run backend is live.
+- Check logs: `gcloud run logs read perfectionweb-backend --region us-central1 --limit 50`
+- Verify `SUPABASE_URL` and `SUPABASE_KEY` are correct in Cloud Run environment variables.
 
 ---
 
@@ -166,8 +191,9 @@ If you see 404 or error:
 **Vercel**:
 - Dashboard → Deployments → select a deployment → Logs tab
 
-**Render**:
-- Dashboard → Web Service → Logs tab (real-time)
+**Google Cloud Run**:
+- Command: `gcloud run logs read perfectionweb-backend --region us-central1 --limit 50`
+- Or via console: https://console.cloud.google.com → Cloud Run → select service → Logs
 
 ---
 
@@ -177,22 +203,25 @@ If you see 404 or error:
 1. **Settings** → **Domains** → add your domain (e.g., `app.yourdomain.com`)
 2. Follow DNS setup instructions provided by Vercel.
 
-### Render
-1. **Settings** → **Custom Domains** → add your domain (e.g., `api.yourdomain.com`)
-2. Follow DNS setup instructions provided by Render.
+### Google Cloud Run
+1. Go to Cloud Run → select service → **Manage Custom Domains**
+2. Add your domain (e.g., `api.yourdomain.com`)
+3. Follow DNS setup instructions provided by Google Cloud.
 
 ---
 
 ## Cost (Free Tier)
 - **Vercel**: Free for static sites, includes 100GB bandwidth/month.
-- **Render**: Free tier has 750 compute hours/month (enough for dev/small traffic). May sleep after 15 min of inactivity.
-  - To avoid sleep, upgrade to **Standard** (~$7/month).
+- **Google Cloud Run**: Free tier includes 2M requests/month + 360K compute seconds. Perfect for low-traffic apps.
+  - After free tier: pay-per-use (~$0.40 per 1M requests + compute time).
 - **Supabase**: Free tier includes 500MB database + 1GB bandwidth.
 
 ---
 
 ## Summary of Files Added/Updated
 - `vercel.json` — Vercel build config for Angular static site
+- `backend/Dockerfile` — Docker container config for Cloud Run
+- `backend/app.yaml` — App Engine config (alternative to Dockerfile)
 - `backend/requirements.txt` — Python dependencies for Render
 - `backend/Procfile` — Render startup command
 - `.env` (already exists) — local Supabase credentials (never commit)
