@@ -1048,6 +1048,9 @@ def get_parent_sessions():
     student_id = request.args.get('student_id')
     month_param = request.args.get('month')
 
+    # Log incoming request parameters for debugging
+    logger.info(f"/api/parent/sessions called with phone={phone}, student_id={student_id}, month={month_param}, raw_args={dict(request.args)}")
+
     try:
         query = supabase.table('session_records').select('*').eq('parent_no', phone)
         if student_id:
@@ -1062,6 +1065,13 @@ def get_parent_sessions():
 
         result = query.execute()
         records = result.data or []
+
+        # Log query result size and months present (helpful to detect missing month values)
+        try:
+            months = sorted(list({r.get('month') for r in records if r.get('month') is not None}))
+        except Exception:
+            months = []
+        logger.info(f"/api/parent/sessions result: {len(records)} records, months_present={months}")
 
         sessions = []
         for r in records:
