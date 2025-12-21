@@ -202,7 +202,7 @@ def format_start_time_arabic(value):
 def parse_general_exam_sheet(file_path):
     """
     Parse general exam Excel sheet
-    Columns: id, name, .Parent No, shamel (a, p), Q
+    Expected columns: id, name, .Parent No, a, p, Q
     """
     try:
         # Try reading with header=0 first
@@ -223,81 +223,56 @@ def parse_general_exam_sheet(file_path):
             else:
                 raise
         
-        # Clean column names (remove spaces, handle special characters)
+        # Clean column names
         df.columns = df.columns.astype(str).str.strip()
         
-        # Log all column names found for debugging
         logger.info(f"General exam columns found: {list(df.columns)}")
         
-        # Find the actual column names (they might have variations)
+        # Map columns by exact name or position
+        col_list = list(df.columns)
         id_col = None
         name_col = None
         parent_col = None
-        shamel_a_col = None
-        shamel_p_col = None
+        a_col = None
+        p_col = None
         q_col = None
-        timeo_col = None  # Optional timeo column
         
-        # First pass: find main columns
-        for col in df.columns:
+        # Try to find columns by name first (case-insensitive, stripped)
+        for col in col_list:
             col_lower = str(col).lower().strip()
-            if 'id' in col_lower and id_col is None and 'parent' not in col_lower:
+            
+            if col_lower == 'id' and id_col is None:
                 id_col = col
-            elif 'name' in col_lower and name_col is None:
+            elif col_lower == 'name' and name_col is None:
                 name_col = col
             elif 'parent' in col_lower and parent_col is None:
                 parent_col = col
-            elif col_lower == 'q' or col_lower.strip() == 'q':
+            elif col_lower == 'a' and a_col is None:
+                a_col = col
+            elif col_lower == 'p' and p_col is None:
+                p_col = col
+            elif col_lower == 'q' and q_col is None:
                 q_col = col
-            elif 'timeo' in col_lower or col_lower == 'time':
-                timeo_col = col
         
-        # Second pass: find shamel columns (a and p) and other columns by position
-        col_list = list(df.columns)
-        col_positions = {col: i for i, col in enumerate(col_list)}
+        # If not all found by name, try by position
+        # Standard order: id, name, parent, a, p, q
+        if not id_col and len(col_list) > 0:
+            id_col = col_list[0]
+        if not name_col and len(col_list) > 1:
+            name_col = col_list[1]
+        if not parent_col and len(col_list) > 2:
+            parent_col = col_list[2]
+        if not a_col and len(col_list) > 3:
+            a_col = col_list[3]
+        if not p_col and len(col_list) > 4:
+            p_col = col_list[4]
+        if not q_col and len(col_list) > 5:
+            q_col = col_list[5]
         
-        if parent_col and parent_col in col_positions:
-            parent_idx = col_positions[parent_col]
-            # Usually shamel a and p come right after parent (next 2 columns)
-            if parent_idx + 1 < len(col_list):
-                potential_a = col_list[parent_idx + 1]
-                col_a_lower = str(potential_a).lower().strip()
-                if col_a_lower == 'a' or col_a_lower.endswith('.a') or col_a_lower.endswith(' a') or 'a' in col_a_lower:
-                    shamel_a_col = potential_a
-            
-            if parent_idx + 2 < len(col_list):
-                potential_p = col_list[parent_idx + 2]
-                col_p_lower = str(potential_p).lower().strip()
-                if col_p_lower == 'p' or col_p_lower.endswith('.p') or col_p_lower.endswith(' p') or col_p_lower == 'p' or 'p' in col_p_lower:
-                    shamel_p_col = potential_p
+        logger.info(f"Mapped columns - id:{id_col}, name:{name_col}, parent:{parent_col}, a:{a_col}, p:{p_col}, q:{q_col}")
         
-        # If not found by position, try by column name matching
-        if not shamel_a_col:
-            for col in col_list:
-                col_lower = str(col).lower().strip()
-                if col_lower == 'a' or col_lower.endswith('.a') or col_lower.endswith(' a'):
-                    shamel_a_col = col
-                    break
-        
-        if not shamel_p_col:
-            for col in col_list:
-                col_lower = str(col).lower().strip()
-                if col_lower == 'p' or col_lower.endswith('.p') or col_lower.endswith(' p'):
-                    shamel_p_col = col
-                    break
-        
-        # If q_col not found, try by position (usually 2nd to last column before timeo)
-        if not q_col:
-            for col in col_list:
-                col_lower = str(col).lower().strip()
-                if col_lower == 'q' or col_lower.strip() == 'q':
-                    q_col = col
-                    break
-        
-        logger.info(f"Mapped columns - id:{id_col}, name:{name_col}, parent:{parent_col}, shamel_a:{shamel_a_col}, shamel_p:{shamel_p_col}, q:{q_col}, timeo:{timeo_col}")
-        
-        if not all([id_col, name_col, parent_col, q_col]):
-            raise ValueError(f"Required columns not found in general exam sheet. Found: {list(df.columns)}")
+        if not all([id_col, name_col, parent_col]):
+            raise ValueError(f"Required columns (id, name, parent_no) not found. Columns: {list(df.columns)}")
         
         records = []
         for idx, row in df.iterrows():
@@ -306,45 +281,74 @@ def parse_general_exam_sheet(file_path):
                 continue
             
             try:
-                # Handle parent_no conversion
+                student_id = str(row[id_col]).strip()
+                student_name = str(row[name_col]).strip() if not pd.isna(row[name_col]) else ''
+                
+                # Handle parent_no
                 parent_no_val = row[parent_col]
                 if pd.isna(parent_no_val):
                     parent_no_str = ''
                 else:
-                    # Try to convert to int, but handle if it's already a string
                     try:
                         parent_no_str = str(int(float(parent_no_val)))
                     except Exception:
                         parent_no_str = str(parent_no_val).strip()
                 
-                student_name = str(row[name_col]).strip() if not pd.isna(row[name_col]) else ''
-                student_id = str(row[id_col]).strip()
-                
                 # Validate required fields
                 if not parent_no_str:
-                    logger.warning("Row %d: Missing or empty parent_no for student '%s' (id='%s')", idx+1, student_name, student_id)
+                    logger.warning(f"Row {idx+1}: Missing parent_no for student '{student_name}' (id='{student_id}')")
                     continue
                 if not student_name:
-                    logger.warning("Row %d: Missing or empty student name for id='%s'", idx+1, student_id)
+                    logger.warning(f"Row {idx+1}: Missing student name for id='{student_id}'")
                     continue
+                
+                # Extract optional fields
+                attendance = 0
+                if a_col:
+                    a_val = row[a_col]
+                    if not pd.isna(a_val):
+                        try:
+                            attendance = 1 if (int(a_val) == 1 or str(a_val).strip() == '1') else 0
+                        except (ValueError, TypeError):
+                            attendance = 0
+                
+                payment = 0
+                if p_col:
+                    p_val = row[p_col]
+                    if not pd.isna(p_val):
+                        try:
+                            payment = 1 if (int(p_val) == 1 or str(p_val).strip() == '1') else 0
+                        except (ValueError, TypeError):
+                            payment = 0
+                
+                quiz_mark = None
+                if q_col:
+                    q_val = row[q_col]
+                    if not pd.isna(q_val):
+                        try:
+                            quiz_mark = float(q_val)
+                        except (ValueError, TypeError):
+                            quiz_mark = None
                 
                 record = {
                     'id': student_id,
                     'name': student_name,
                     'parent_no': parent_no_str,
-                    'attendance': 1 if shamel_a_col and not pd.isna(row[shamel_a_col]) and (row[shamel_a_col] == 1 or str(row[shamel_a_col]).strip() == '1') else 0,
-                    'payment': 1 if shamel_p_col and not pd.isna(row[shamel_p_col]) and (row[shamel_p_col] == 1 or str(row[shamel_p_col]).strip() == '1') else 0,
-                    'quiz_mark': float(row[q_col]) if not pd.isna(row[q_col]) else None
+                    'attendance': attendance,
+                    'payment': payment,
+                    'quiz_mark': quiz_mark
                 }
                 records.append(record)
+                logger.info(f"Parsed row {idx+1}: {student_id} - {student_name}")
+                
             except Exception as e:
-                # Skip rows with errors but continue processing
-                logger.warning("Error processing row %d (id='%s'): %s", idx+1, row.get(id_col, 'unknown'), str(e))
+                logger.warning(f"Error processing row {idx+1}: {str(e)}")
                 continue
         
-        logger.info("Parsed %d valid records from general exam sheet", len(records))
+        logger.info(f"Parsed {len(records)} valid records from general exam sheet")
         return records
     except Exception as e:
+        logger.error(f"Error parsing general exam sheet: {str(e)}")
         raise Exception(f"Error parsing general exam sheet: {str(e)}")
 
 def parse_normal_lecture_sheet(file_path):
