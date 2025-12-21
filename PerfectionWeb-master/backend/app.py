@@ -1300,7 +1300,9 @@ def admin_login():
             admin = result.data[0]
             print(f"✅ Admin found: {admin}")
             
-            if admin.get('password_hash') == password:
+            # Compare plain password with stored password_hash (both stored as plain text in DB)
+            stored_password = admin.get('password_hash', '')
+            if stored_password == password:
                 print("✅ Password match - Login successful!")
                 return jsonify({
                     'success': True,
@@ -1311,7 +1313,7 @@ def admin_login():
                 }), 200
             else:
                 print(f"❌ Password mismatch!")
-                print(f"   Stored: '{admin.get('password_hash')}'")
+                print(f"   Stored: '{stored_password}'")
                 print(f"   Provided: '{password}'")
                 return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
         else:
