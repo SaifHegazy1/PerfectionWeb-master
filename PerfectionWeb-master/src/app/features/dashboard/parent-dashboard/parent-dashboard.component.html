@@ -95,7 +95,9 @@
           <option *ngFor="let m of [1,2,3,4,5,6,7,8,9,10,11,12]" [ngValue]="m">{{ lang() === 'en' ? ('Month ' + m) :
             ('الشهر ' + m) }}</option>
         </select>
-        <button class="btn btn-primary" (click)="applyMonthFilter()">{{ lang() === 'en' ? 'Filter' : 'تصفية' }}</button>
+        <button type="button" class="btn btn-primary" (click)="applyMonthFilter()"
+          style="display:inline-block;min-width:84px;padding:8px 12px;">{{ lang() === 'en' ? 'Filter' : 'تصفية'
+          }}</button>
       </div>
 
       <!-- Loading State for Students -->
