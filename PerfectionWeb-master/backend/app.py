@@ -199,7 +199,22 @@ def parse_general_exam_sheet(file_path):
     """
     try:
         # Try reading with header=0 first
-        df = pd.read_excel(file_path, header=0)
+        try:
+            df = pd.read_excel(file_path, header=0)
+        except AttributeError as ae:
+            # Handle openpyxl ReadOnlyWorksheet lacking some attributes
+            if 'defined_names' in str(ae) or 'ReadOnlyWorksheet' in str(ae):
+                from openpyxl import load_workbook
+                wb = load_workbook(file_path, data_only=True)
+                ws = wb.active
+                data = list(ws.values)
+                if not data:
+                    raise
+                header = [str(h).strip() if h is not None else '' for h in data[0]]
+                rows = data[1:]
+                df = pd.DataFrame(rows, columns=header)
+            else:
+                raise
         
         # Clean column names (remove spaces, handle special characters)
         df.columns = df.columns.astype(str).str.strip()
