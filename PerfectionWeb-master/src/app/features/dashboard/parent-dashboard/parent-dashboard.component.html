@@ -272,29 +272,6 @@
                   لجميع جلسات الفيزياء' }}</p>
               </div>
             </div>
-            <div class="section-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-              <button type="button" class="btn btn-filter" (click)="showFilterPanel.set(!showFilterPanel())"
-                title="{{ lang() === 'en' ? 'Filter' : 'تصفية' }}"
-                style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:8px;background:#fff;border:1px solid rgba(0,0,0,0.06);">
-                <lucide-angular [img]="Filter" class="btn-icon"></lucide-angular>
-                <span *ngIf="lang() === 'en'">Filter</span>
-                <span *ngIf="lang() !== 'en'">تصفية</span>
-              </button>
-            </div>
-          </div>
-          <div *ngIf="showFilterPanel()"
-            style="margin-top:12px;margin-bottom:12px;display:flex;gap:8px;align-items:center;">
-            <label class="selector-label">{{ lang() === 'en' ? 'Month' : 'الشهر' }}</label>
-            <select class="month-select" [(ngModel)]="selectedMonth">
-              <option [ngValue]="null">{{ lang() === 'en' ? 'All months' : 'كل الأشهر' }}</option>
-              <option *ngFor="let m of [1,2,3,4,5,6,7,8,9,10,11,12]" [ngValue]="m">{{ lang() === 'en' ? ('Month ' + m) :
-                ('الشهر ' + m) }}</option>
-            </select>
-            <button type="button" class="btn btn-primary" (click)="applyMonthFilter()" style="min-width:84px;">{{ lang()
-              === 'en' ? 'Apply' : 'تطبيق' }}</button>
-            <button type="button" class="btn btn-secondary" (click)="showFilterPanel.set(false)">{{ lang() === 'en' ?
-              'Close' : 'إغلاق' }}</button>
-          </div>
         </div>
 
         <!-- Loading State for Sessions -->

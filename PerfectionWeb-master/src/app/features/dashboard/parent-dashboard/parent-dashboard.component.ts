@@ -125,8 +125,6 @@ export class ParentDashboardComponent implements OnInit {
 
   // Language / translations (simple)
   lang = signal<'en' | 'ar'>('en');
-  // Filter panel visibility
-  showFilterPanel = signal<boolean>(false);
 
   constructor(
     private router: Router,
@@ -153,13 +151,7 @@ export class ParentDashboardComponent implements OnInit {
     this.loadStudents();
   }
 
-  toggleFilterPanel(): void {
-    this.showFilterPanel.set(!this.showFilterPanel());
-    // If opening, set focus or ensure selected student is loaded
-    if (this.showFilterPanel()) {
-      // no-op for now
-    }
-  }
+  // filter panel removed
 
   loadStudents(): void {
     this.isLoadingStudents.set(true);
