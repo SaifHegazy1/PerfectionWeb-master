@@ -655,6 +655,28 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                         except Exception:
                             error_msg = str(insert_error)
 
+                        # If the error is caused by a missing column in the schema cache
+                        # (e.g. admin_quiz_mark), try removing that column and retrying.
+                        if isinstance(error_msg, str) and ("Could not find the 'admin_quiz_mark'" in error_msg or 'PGRST204' in str(insert_error)):
+                            try:
+                                reduced_payload = dict(db_data)
+                                if 'admin_quiz_mark' in reduced_payload:
+                                    reduced_payload.pop('admin_quiz_mark')
+                                # attempt insert without the offending column
+                                retry_res = supabase.table('session_records').insert(reduced_payload).execute()
+                                retry_error = getattr(retry_res, 'error', None)
+                                if not retry_error:
+                                    updated_count += 1
+                                    logger.info(f"Inserted record for %s after removing admin_quiz_mark (session %s, group %s)", student_id, session_number, group)
+                                    # remove last recorded error if present
+                                    if errors:
+                                        errors.pop()
+                                    continue
+                                else:
+                                    logger.error("Retry insert error for %s: %s -- reduced payload: %s", student_id, retry_error, reduced_payload)
+                            except Exception as retry_exc:
+                                logger.exception("Retry insert exception for %s: %s", student_id, str(retry_exc))
+
                         # Record detailed error for response
                         errors.append(f"Row {student_id}: {error_msg} | payload: {db_data}")
 
