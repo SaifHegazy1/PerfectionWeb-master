@@ -1507,6 +1507,67 @@ def get_upload_log():
         return jsonify({'error': f'Error reading log file: {str(e)}'}), 500
 
 
+@app.route('/api/admin/upload-errors', methods=['GET'])
+def get_admin_upload_errors():
+    """Return structured upload errors for admin dashboard."""
+    try:
+        limit = int(request.args.get('limit', 50))
+    except:
+        limit = 50
+
+    try:
+        if not os.path.exists(LOG_FILE):
+            return jsonify({'errors': [], 'total': 0}), 200
+
+        errors = []
+        with open(LOG_FILE, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Parse lines that contain errors
+                if 'ERROR' in line or 'error' in line or 'Error' in line:
+                    # Extract timestamp and message
+                    try:
+                        # Format: 2025-12-21 01:25:26,123 - ERROR - message
+                        parts = line.split(' - ', 2)
+                        if len(parts) >= 3:
+                            timestamp = parts[0]
+                            level = parts[1]
+                            message = parts[2]
+                            errors.append({
+                                'timestamp': timestamp,
+                                'level': level,
+                                'message': message
+                            })
+                        else:
+                            errors.append({
+                                'timestamp': '',
+                                'level': 'ERROR',
+                                'message': line
+                            })
+                    except Exception as e:
+                        errors.append({
+                            'timestamp': '',
+                            'level': 'ERROR',
+                            'message': line
+                        })
+        
+        # Return most recent errors first
+        errors_recent = errors[-limit:] if len(errors) > limit else errors
+        errors_recent.reverse()
+        
+        return jsonify({
+            'errors': errors_recent,
+            'total': len(errors),
+            'limit': limit
+        }), 200
+    except Exception as e:
+        logger.exception(f"Error reading upload errors: {str(e)}")
+        return jsonify({'error': f'Error reading upload errors: {str(e)}', 'errors': []}), 500
+
+
 
 @app.route('/api/export-upload-errors', methods=['GET'])
 def export_upload_errors():
