@@ -49,10 +49,17 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Initialize supabase as None; will fail gracefully if not set
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        logger.info("Supabase client initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase: {str(e)}")
+        supabase = None
+else:
+    logger.warning("SUPABASE_URL or SUPABASE_KEY not set - database operations will fail")
 
 # Allowed groups (added 'online' option)
 ALLOWED_GROUPS = ['cam1', 'maimi', 'cam2', 'west', 'station1', 'station2', 'station3', 'online']
@@ -774,6 +781,10 @@ def upload_excel():
     - has_time: true/false (show finish time in parent dashboard)
     """
     try:
+        # Check if Supabase is initialized
+        if not supabase:
+            return jsonify({'error': 'Database not configured. Please contact administrator.'}), 500
+        
         # Validate required fields
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
