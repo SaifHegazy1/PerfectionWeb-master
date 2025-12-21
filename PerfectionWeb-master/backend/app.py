@@ -675,6 +675,11 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
         logger.exception(f"✗ Critical error in update_database: {str(e)}")
         raise Exception(f"Error updating database: {str(e)}")
 
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint - returns API info"""
+    return jsonify({'message': 'Perfection Physics Backend API', 'version': '1.0', 'status': 'running'}), 200
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
