@@ -322,7 +322,25 @@ def parse_normal_lecture_sheet(file_path):
     Columns: id, name, pokin, student no., Parent No., a, p, Q, time, s1
     """
     try:
-        df = pd.read_excel(file_path, header=0)
+        try:
+            df = pd.read_excel(file_path, header=0)
+        except AttributeError as ae:
+            # Workaround for openpyxl returning ReadOnlyWorksheet without
+            # `defined_names` when pandas/openpyxl open the file in
+            # read-only mode. Fall back to loading with openpyxl directly
+            # and build a DataFrame from the sheet values.
+            if 'defined_names' in str(ae):
+                from openpyxl import load_workbook
+                wb = load_workbook(file_path, data_only=True)
+                ws = wb.active
+                data = list(ws.values)
+                if not data:
+                    raise
+                header = [str(h).strip() if h is not None else '' for h in data[0]]
+                rows = data[1:]
+                df = pd.DataFrame(rows, columns=header)
+            else:
+                raise
         
         # Clean column names
         df.columns = df.columns.astype(str).str.strip()
