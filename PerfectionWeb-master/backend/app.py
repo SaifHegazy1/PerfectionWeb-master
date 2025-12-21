@@ -697,27 +697,30 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                             except Exception as retry_exc:
                                 logger.exception("Retry insert exception for %s: %s", student_id, str(retry_exc))
 
-                        # Record detailed error for response
-                        errors.append(f"Row {student_id}: {error_msg} | payload: {db_data}")
-
-                        # Check for duplicate key constraint or unique violation and attempt updates
-                        if '23505' in str(error_msg) or 'duplicate' in str(error_msg).lower() or 'unique' in str(error_msg).lower():
+                        # If duplicate key (unique constraint) - try updating the existing row instead of failing
+                        if isinstance(error_msg, str) and ('23505' in error_msg or 'duplicate' in error_msg.lower() or 'unique' in error_msg.lower() or 'session_records_student_name_session_number_parent_no_key' in error_msg):
                             try:
-                                # Attempt targeted update by student_id
+                                # Attempt targeted update by student_id and session/group
                                 update_res = supabase.table('session_records').update(db_data).eq('student_id', student_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
                                 update_error = getattr(update_res, 'error', None)
                                 if not update_error:
                                     updated_count += 1
-                                    logger.info(f"Updated duplicate record for {student_id}")
-                                    # remove last error since we resolved it
-                                    if errors:
-                                        errors.pop()
+                                    logger.info(f"Resolved duplicate by updating record for {student_id}")
+                                    # Do not treat this as an error (ignore duplicate)
+                                    continue
                                 else:
                                     ue_msg = update_error.get('message') if isinstance(update_error, dict) else str(update_error)
                                     logger.error(f"Update returned error for {student_id}: {ue_msg} -- payload: {db_data}")
-                                    # Try fallback name-based resolution
-                                    try:
-                                        logger.info(f"Attempting to find existing record by name '%s' for session %s, group %s", student_name, session_number, group)
+                                    # If update also failed, log and skip (do not add to errors to avoid flooding)
+                                    logger.warning(f"Skipping row {student_id} due to duplicate and failed update: {ue_msg}")
+                                    continue
+                            except Exception as upd_exc:
+                                logger.exception("Exception while attempting to resolve duplicate for %s: %s", student_id, str(upd_exc))
+                                # Skip this row
+                                continue
+
+                        # Record detailed error for response
+                        errors.append(f"Row {student_id}: {error_msg} | payload: {db_data}")
                                         existing = supabase.table('session_records').select('student_id').eq('student_name', student_name).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).limit(1).execute()
                                         if getattr(existing, 'data', None) and len(existing.data) > 0:
                                             old_id = existing.data[0].get('student_id')
