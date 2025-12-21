@@ -700,50 +700,60 @@ def update_database(records, session_number, quiz_mark, finish_time, group, is_g
                         # If duplicate key (unique constraint) - try updating the existing row instead of failing
                         if isinstance(error_msg, str) and ('23505' in error_msg or 'duplicate' in error_msg.lower() or 'unique' in error_msg.lower() or 'session_records_student_name_session_number_parent_no_key' in error_msg):
                             try:
-                                # Attempt targeted update by student_id and session/group
-                                update_res = supabase.table('session_records').update(db_data).eq('student_id', student_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
+                                # Preferred: update by the desired unique key (student_name, parent_no)
+                                update_res = supabase.table('session_records').update(db_data).eq('student_name', student_name).eq('parent_no', parent_no).execute()
                                 update_error = getattr(update_res, 'error', None)
                                 if not update_error:
                                     updated_count += 1
-                                    logger.info(f"Resolved duplicate by updating record for {student_id}")
-                                    # Do not treat this as an error (ignore duplicate)
+                                    logger.info("Updated existing record by student_name+parent_no for %s", student_id)
+                                    if errors:
+                                        errors.pop()
+                                    continue
+                            except Exception:
+                                logger.exception("Exception while attempting update by student_name+parent_no for %s", student_id)
+
+                            # Fallback: try targeted update by student_id + session/group
+                            try:
+                                fut_update = supabase.table('session_records').update(db_data).eq('student_id', student_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
+                                fut_err = getattr(fut_update, 'error', None)
+                                if not fut_err:
+                                    updated_count += 1
+                                    logger.info("Updated duplicate record for %s via fallback keys", student_id)
+                                    if errors:
+                                        errors.pop()
                                     continue
                                 else:
-                                    ue_msg = update_error.get('message') if isinstance(update_error, dict) else str(update_error)
-                                    logger.error(f"Update returned error for {student_id}: {ue_msg} -- payload: {db_data}")
-                                    # If update also failed, log and skip (do not add to errors to avoid flooding)
-                                    logger.warning(f"Skipping row {student_id} due to duplicate and failed update: {ue_msg}")
-                                    continue
-                            except Exception as upd_exc:
-                                logger.exception("Exception while attempting to resolve duplicate for %s: %s", student_id, str(upd_exc))
-                                # Skip this row
-                                continue
+                                    logger.error("Fallback update also failed for %s: %s", student_id, fut_err)
+                            except Exception:
+                                logger.exception("Fallback update exception for %s", student_id)
 
                         # Record detailed error for response
                         errors.append(f"Row {student_id}: {error_msg} | payload: {db_data}")
-                                        existing = supabase.table('session_records').select('student_id').eq('student_name', student_name).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).limit(1).execute()
-                                        if getattr(existing, 'data', None) and len(existing.data) > 0:
-                                            old_id = existing.data[0].get('student_id')
-                                            if old_id and old_id != student_id:
-                                                logger.info("Found same person '%s' with old ID '%s', updating to new ID '%s'", student_name, old_id, student_id)
-                                                update_data = dict(db_data)
-                                                update_data['student_id'] = student_id
-                                                update_by_name = supabase.table('session_records').update(update_data).eq('student_id', old_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
-                                                update_name_error = getattr(update_by_name, 'error', None)
-                                                if not update_name_error:
-                                                    updated_count += 1
-                                                    logger.info("Updated student ID from '%s' to '%s' for '%s'", old_id, student_id, student_name)
-                                                    # remove last error since we resolved it
-                                                    if errors:
-                                                        errors.pop()
-                                                else:
-                                                    name_err = update_name_error.get('message') if isinstance(update_name_error, dict) else str(update_name_error)
-                                                    logger.error("Name-based update failed for %s: %s -- payload: %s", student_name, name_err, db_data)
-                                    except Exception as name_err:
-                                        logger.exception("Name-based lookup/update exception for %s: %s", student_name, str(name_err))
-                            except Exception as update_err:
-                                logger.exception("Update exception for %s: %s -- payload: %s", student_id, str(update_err), db_data)
-                                errors.append(f"Row {student_id}: Update exception: {str(update_err)} | payload: {db_data}")
+
+                        # As a last attempt, try to find an existing record by name/session/group and update student_id if it differs
+                        try:
+                            existing = supabase.table('session_records').select('student_id').eq('student_name', student_name).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).limit(1).execute()
+                            if getattr(existing, 'data', None) and len(existing.data) > 0:
+                                old_id = existing.data[0].get('student_id')
+                                if old_id and old_id != student_id:
+                                    logger.info("Found same person '%s' with old ID '%s', updating to new ID '%s'", student_name, old_id, student_id)
+                                    update_data = dict(db_data)
+                                    update_data['student_id'] = student_id
+                                    try:
+                                        update_by_name = supabase.table('session_records').update(update_data).eq('student_id', old_id).eq('session_number', session_number).eq('group_name', group).eq('is_general_exam', is_general_exam).execute()
+                                        update_name_error = getattr(update_by_name, 'error', None)
+                                        if not update_name_error:
+                                            updated_count += 1
+                                            logger.info("Updated student ID from '%s' to '%s' for '%s'", old_id, student_id, student_name)
+                                            if errors:
+                                                errors.pop()
+                                        else:
+                                            name_err = update_name_error.get('message') if isinstance(update_name_error, dict) else str(update_name_error)
+                                            logger.error("Name-based update failed for %s: %s -- payload: %s", student_name, name_err, db_data)
+                                    except Exception:
+                                        logger.exception("Name-based update exception for %s", student_name)
+                        except Exception as name_err:
+                            logger.exception("Name-based lookup/update exception for %s: %s", student_name, str(name_err))
                 except Exception as e:
                     # Exception from Supabase client call
                     err_text = str(e)
@@ -1043,6 +1053,8 @@ def get_parent_sessions():
                 'name': r.get('lecture_name') or r.get('exam_name') or f"Session {r.get('session_number')}",
                 'lectureName': r.get('lecture_name') or r.get('exam_name'),
                 'date': r.get('finish_time') or '',
+                # include created_at so frontend can order by upload time
+                'created_at': r.get('created_at') or r.get('createdAt') or r.get('created at'),
                 'is_general_exam': r.get('is_general_exam', False),
                 'isGeneralExam': r.get('is_general_exam', False),
                 'startTime': formatted_start,
@@ -1073,7 +1085,13 @@ def get_parent_sessions():
             
             sessions.append(session)
 
-        sessions = sorted(sessions, key=lambda s: s.get('chapter') or 0, reverse=True)
+        # Prefer ordering by upload/creation time (newest first). If created_at
+        # is not present, fall back to ordering by chapter/session number.
+        sessions = sorted(
+            sessions,
+            key=lambda s: ((s.get('created_at') or ''), (s.get('chapter') or 0)),
+            reverse=True
+        )
         return jsonify({'sessions': sessions}), 200
         
     except Exception as e:
