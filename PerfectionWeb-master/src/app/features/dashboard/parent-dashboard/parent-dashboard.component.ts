@@ -228,15 +228,15 @@ export class ParentDashboardComponent implements OnInit {
     const combined = student.combinedId;
     this.studentService.getAvailableMonthsForStudent(combined).subscribe({
       next: (months) => {
+        // Use only months returned by backend. If none returned, leave empty (only 'All months' will be shown).
         if (months && months.length > 0) {
           this.availableMonths.set(months);
         } else {
-          // if backend returns no months, keep full months list as fallback
-          this.availableMonths.set([1,2,3,4,5,6,7,8,9,10,11,12]);
+          this.availableMonths.set([]);
         }
       },
       error: () => {
-        this.availableMonths.set([1,2,3,4,5,6,7,8,9,10,11,12]);
+        this.availableMonths.set([]);
       }
     });
   }
