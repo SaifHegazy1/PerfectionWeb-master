@@ -86,24 +86,24 @@ export class AdminDashboardComponent implements OnInit {
       return;
     }
 
-    this.loadAllStudents();
+    // this.loadAllStudents();
     this.loadUploadErrors();
   }
 
-  loadAllStudents(month?: number | null): void {
-    this.studentService.getAllStudents(month ?? undefined).subscribe({
-      next: (students) => {
-        this.allStudents.set(students);
-      },
-      error: (error) => {
-        console.error('Error loading students:', error);
-      }
-    });
-  }
+  // loadAllStudents(month?: number | null): void {
+  //   this.studentService.getAllStudents(month ?? undefined).subscribe({
+  //     next: (students) => {
+  //       this.allStudents.set(students);
+  //     },
+  //     error: (error) => {
+  //       console.error('Error loading students:', error);
+  //     }
+  //   });
+  // }
 
-  applyAdminMonthFilter(): void {
-    this.loadAllStudents(this.selectedMonth());
-  }
+  // applyAdminMonthFilter(): void {
+  //   this.loadAllStudents(this.selectedMonth());
+  // }
 
   getAttendanceColor(attendance: number): string {
     if (attendance >= 90) return 'bg-green-500/20 text-green-300';
