@@ -24,3 +24,44 @@ body {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
+/* Layout rules to make the site fit and look good on 1920x1080 displays */
+:root {
+  --site-max-width: 1920px;
+}
+
+/* Ensure root and app take full viewport and center content */
+html,
+body,
+app-root,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* Center main content and constrain to a comfortable max width on very wide screens */
+.app-container,
+.main-container,
+.max-w-screen {
+  box-sizing: border-box;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 1600px) {
+
+  /* keep content comfortably centered on very large screens */
+  .app-container,
+  .main-container {
+    max-width: 1400px;
+  }
+}
+
+@media (min-width: 1920px) {
+
+  /* slightly scale up key elements if desired */
+  body {
+    font-size: 18px;
+  }
+}
