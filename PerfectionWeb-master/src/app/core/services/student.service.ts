@@ -21,7 +21,6 @@ export interface Student {
   };
 }
 
-// Mock student data
 const MOCK_STUDENTS: Student[] = [
   {
     id: 'M-123',
@@ -47,9 +46,6 @@ const MOCK_STUDENTS: Student[] = [
 export class StudentService {
   constructor(private http: HttpClient, private authService: AuthService) { }
 
-  /**
-   * Get students for the logged-in parent from backend API
-   */
   getStudentsForParent(): Observable<Student[]> {
     const user = this.authService.getCurrentUser();
     if (!user || !user.identifier) return of([]);
@@ -58,7 +54,6 @@ export class StudentService {
     return this.http.get<{ students: Student[] }>(`${environment.apiUrl}/parent/students`, { params }).pipe(
       map(resp => {
         const students = resp.students || [];
-        // Deduplicate students by `id` where possible; fallback to `name+student_no`.
         const seen = new Map<string, boolean>();
         const unique: Student[] = [];
         for (const s of students) {
@@ -78,23 +73,13 @@ export class StudentService {
     );
   }
 
-  /**
-   * Get all students (for admin). Accepts optional `month` to filter records.
-   */
-  getAllStudents(month?: number): Observable<Student[]> {
-    let params = new HttpParams();
-    if (month !== undefined && month !== null && !isNaN(Number(month))) {
-      params = params.set('month', String(month));
-    }
-    return this.http.get<{ students: Student[] }>(`${environment.apiUrl}/students`, { params }).pipe(
+  getAllStudents(): Observable<Student[]> {
+    return this.http.get<{ students: Student[] }>(`${environment.apiUrl}/students`).pipe(
       map(resp => resp.students || []),
       catchError(() => of(MOCK_STUDENTS))
     );
   }
 
-  /**
-   * Get student by ID
-   */
   getStudentById(id: string): Observable<Student | undefined> {
     const user = this.authService.getCurrentUser();
     if (!user || !user.identifier) return of(undefined);
@@ -106,23 +91,18 @@ export class StudentService {
     );
   }
 
-  /**
-   * Get sessions for a given student for the logged-in parent
-   */
-  getSessionsForStudent(studentId: string, month?: number): Observable<any[]> {
+  getSessionsForStudent(combinedId: string): Observable<any[]> {
     const user = this.authService.getCurrentUser();
     if (!user || !user.identifier) return of([]);
-
-    let params = new HttpParams().set('phone_number', user.identifier).set('student_id', studentId);
-    if (month !== undefined && month !== null && !isNaN(Number(month))) {
-      params = params.set('month', String(month));
-    }
-    // Debug: log the request that's about to be sent
-    try {
-      // eslint-disable-next-line no-console
-      console.log('getSessionsForStudent: GET', `${environment.apiUrl}/parent/sessions`, params.toString());
-    } catch (e) { }
-
+    
+    const parts = combinedId.split('_');
+    const parentNo = parts[0];
+    const studentName = parts.slice(1).join('_');
+    
+    const params = new HttpParams()
+      .set('phone_number', user.identifier)
+      .set('student_name', studentName);
+    
     return this.http.get<{ sessions: any[] }>(`${environment.apiUrl}/parent/sessions`, { params }).pipe(
       map(resp => resp.sessions || []),
       catchError(() => of([]))

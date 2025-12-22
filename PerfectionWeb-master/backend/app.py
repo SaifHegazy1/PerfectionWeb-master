@@ -1040,6 +1040,8 @@ def get_parent_students():
 def get_parent_sessions():
     """Return session records for a parent with proper boolean handling"""
     phone = request.args.get('phone_number')
+    student_name = request.args.get('student_name')  # ✅ ADD THIS LINE
+    
     if not phone:
         return jsonify({'error': 'phone_number query parameter required'}), 400
     phone = normalize_phone(phone)
@@ -1053,18 +1055,19 @@ def get_parent_sessions():
 
     try:
         query = supabase.table('session_records').select('*').eq('parent_no', phone)
-        if student_id:
-            query = query.eq('student_id', student_id)
-        if month_param:
-            try:
-                month_int = int(month_param)
-                query = query.eq('month', month_int)
-            except Exception:
-                # ignore invalid month values and continue without month filtering
-                pass
-
+        
+        # ✅ ADD THIS FILTER
+        if student_name:
+            query = query.eq('student_name', student_name)
+            
         result = query.execute()
         records = result.data or []
+        if student_name:
+            logger.info(f"Filtered sessions for parent {phone}, student {student_name}: {len(records)} sessions")
+        else:
+            logger.info(f"All sessions for parent {phone}: {len(records)} sessions")
+        
+        
 
         # Log query result size and months present (helpful to detect missing month values)
         try:
