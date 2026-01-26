@@ -1,0 +1,199 @@
+<div class="min-h-screen bg-gradient-to-br from-[#1a1f3a] to-[#2d1b4e]">
+  <!-- Navigation Buttons -->
+  <div class="fixed top-4 left-4 z-20">
+    <button (click)="goBack()" class="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
+             text-white hover:bg-white/30 transition-all duration-200 whitespace-nowrap">
+      <lucide-angular [img]="ChevronLeft" class="w-5 h-5"></lucide-angular>
+      <span class="text-sm font-medium">{{ lang() === 'en' ? 'Back' : 'رجوع' }}</span>
+    </button>
+  </div>
+
+  <!-- Center Top Navigation -->
+  <div class="fixed top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-3 z-20">
+    <button *ngIf="false" type="button" (click)="handleLogout()" class="flex items-center gap-2 px-4 py-2 bg-red-500/30 backdrop-blur-sm rounded-lg 
+             text-red-300 hover:bg-red-500/50 transition-all duration-200" title="Logout">
+      <lucide-angular [img]="LogOut" class="w-5 h-5"></lucide-angular>
+      <span class="text-sm font-medium">{{ lang() === 'en' ? 'Logout' : 'تسجيل' }}</span>
+    </button>
+
+    <button type="button" (click)="toggleLanguage()" class="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
+             text-white hover:bg-white/30 transition-all duration-200 text-sm font-medium">
+      {{ lang() === 'en' ? 'EN' : 'ع/AR' }}
+    </button>
+  </div>
+
+  <!-- Bottom-left persistent logout for admin (ensures logout always reachable) -->
+  <div style="position:fixed; left:16px; bottom:16px; z-index:9999; pointer-events:auto;">
+    <button id="logout-bottom-admin" (click)="handleLogout()" title="Logout"
+      style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#ef4444;color:white;border-radius:8px;border:none;box-shadow:0 4px 14px rgba(0,0,0,0.2);">
+      <lucide-angular [img]="LogOut" class="w-4 h-4" aria-hidden="true"></lucide-angular>
+      <span style="font-size:13px;font-weight:600">{{ lang() === 'en' ? 'Logout' : 'تسجيل الخروج' }}</span>
+    </button>
+  </div>
+
+  <!-- Top Navigation -->
+  <!-- <app-top-nav></app-top-nav> -->
+
+  <!-- Main Content -->
+  <div class="pt-20 px-4 pb-8">
+    <div class="max-w-7xl mx-auto">
+
+      <!-- Welcome Header -->
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">Admin Dashboard</h1>
+        <p class="text-white/70">Manage all students and view analytics</p>
+      </div>
+
+      <!-- Stats Overview -->
+      <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+
+        <!-- Total Students -->
+        <div
+          class="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6 hover:bg-white/15 transition-all">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/70 text-sm mb-1">Total Students</p>
+              <p class="text-3xl font-bold text-white">{{ totalStudents() }}</p>
+            </div>
+            <lucide-angular [img]="Users" class="w-12 h-12 text-[#4FD1C5]"></lucide-angular>
+          </div>
+        </div>
+
+        <!-- Average Attendance -->
+        <div
+          class="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6 hover:bg-white/15 transition-all">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/70 text-sm mb-1">Avg Attendance</p>
+              <p class="text-3xl font-bold text-white">{{ averageAttendance() }}%</p>
+            </div>
+            <lucide-angular [img]="TrendingUp" class="w-12 h-12 text-[#10B981]"></lucide-angular>
+          </div>
+        </div>
+
+        <!-- Total Revenue -->
+        <div
+          class="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6 hover:bg-white/15 transition-all">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/70 text-sm mb-1">Total Revenue</p>
+              <p class="text-3xl font-bold text-white">{{ totalRevenue() }}</p>
+            </div>
+            <lucide-angular [img]="DollarSign" class="w-12 h-12 text-[#F6AD55]"></lucide-angular>
+          </div>
+        </div>
+
+        <!-- Avg Quiz Score -->
+        <div
+          class="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6 hover:bg-white/15 transition-all">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/70 text-sm mb-1">Avg Quiz Score</p>
+              <p class="text-3xl font-bold text-white">{{ averageQuizScore() }}%</p>
+            </div>
+            <lucide-angular [img]="Award" class="w-12 h-12 text-[#9F7AEA]"></lucide-angular>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="mb-10">
+        <h2 class="text-2xl font-bold text-white mb-4">Upload Excel Data</h2>
+        <p class="text-white/60 mb-4">
+          Use this form to upload normal lecture or general exam sheets and sync them with Supabase.
+        </p>
+        <div class="flex items-center gap-3 mb-4">
+          <app-excel-upload></app-excel-upload>
+          <button (click)="downloadLog()" type="button"
+            class="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition">
+            Download Error Log
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload Errors Section -->
+      <div class="mb-8" *ngIf="uploadErrors().length > 0">
+        <div class="bg-red-500/10 backdrop-blur-xl rounded-2xl border border-red-500/30 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-red-300">Recent Upload Errors</h2>
+            <button (click)="loadUploadErrors()" type="button"
+              class="text-sm px-3 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition">
+              Refresh
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-white/80">
+              <thead class="border-b border-red-500/20">
+                <tr>
+                  <th class="text-left py-3 px-4">Timestamp</th>
+                  <th class="text-left py-3 px-4">Level</th>
+                  <th class="text-left py-3 px-4">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let error of uploadErrors()" class="border-b border-red-500/10 hover:bg-red-500/5">
+                  <td class="py-3 px-4 text-red-300 font-mono text-xs">{{ error.timestamp }}</td>
+                  <td class="py-3 px-4">
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold"
+                      [class]="error.level === 'ERROR' ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'">
+                      {{ error.level }}
+                    </span>
+                  </td>
+                  <td class="py-3 px-4 text-white/70 break-words max-w-md">{{ error.message }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Students Table -->
+      <div class="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6">
+        <h2 class="text-xl font-bold text-white mb-4">All Students</h2>
+
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-white/10">
+                <th class="text-left py-3 px-4 text-white/70 font-semibold">Name</th>
+                <th class="text-left py-3 px-4 text-white/70 font-semibold">Grade</th>
+                <th class="text-center py-3 px-4 text-white/70 font-semibold">Attendance</th>
+                <th class="text-center py-3 px-4 text-white/70 font-semibold">Homework</th>
+                <th class="text-center py-3 px-4 text-white/70 font-semibold">Quiz Avg</th>
+                <th class="text-center py-3 px-4 text-white/70 font-semibold">Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let student of allStudents()"
+                class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                <td class="py-4 px-4 text-white font-medium">{{ student.name }}</td>
+                <td class="py-4 px-4 text-white/70">{{ student.grade }}</td>
+                <td class="py-4 px-4 text-center">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                    [class]="getAttendanceColor(student.attendance)">
+                    {{ student.attendance }}%
+                  </span>
+                </td>
+                <td class="py-4 px-4 text-center text-white/70">
+                  <!-- {{ student.homework.completed }}/{{ student.homework.total }} -->
+                </td>
+                <td class="py-4 px-4 text-center">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                    [class]="getScoreColor(student.quizzes.average)">
+                    {{ student.quizzes.average }}%
+                  </span>
+                </td>
+                <td class="py-4 px-4 text-center">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                    [class]="getPaymentColor(student.payments)">
+                    {{ student.payments.paid }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

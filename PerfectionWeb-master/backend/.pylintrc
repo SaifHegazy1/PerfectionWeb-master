@@ -1,0 +1,12 @@
+[MESSAGES CONTROL]
+disable=
+    broad-except,
+    bare-except,
+    unused-variable,
+    f-string-without-interpolation,
+    pointless-exception-statement,
+    unreachable,
+    duplicate-except
+
+[FORMAT]
+max-line-length=120

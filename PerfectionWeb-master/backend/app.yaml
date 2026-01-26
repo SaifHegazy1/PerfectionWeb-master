@@ -1,0 +1,12 @@
+runtime: python311
+
+env: standard
+
+entrypoint: gunicorn --bind :8080 --workers 4 --threads 2 --worker-class gthread --worker-tmp-dir /dev/shm app:app
+
+env_variables:
+  PORT: "8080"
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 5

@@ -1,0 +1,216 @@
+<div class="excel-upload-container">
+  <!-- Navigation Buttons -->
+  <div class="fixed top-4 left-4 right-4 flex justify-between items-center z-20">
+    <button type="button" (click)="goBack()" class="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
+             text-white hover:bg-white/30 transition-all duration-200">
+      <lucide-angular [img]="ChevronLeft" class="w-5 h-5"></lucide-angular>
+      <span class="text-sm font-medium">{{ lang() === 'en' ? 'Back' : 'رجوع' }}</span>
+    </button>
+
+    <button type="button" (click)="toggleLanguage()" class="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg 
+             text-white hover:bg-white/30 transition-all duration-200 text-sm font-medium">
+      {{ lang() === 'en' ? 'EN' : 'ع/AR' }}
+    </button>
+  </div>
+
+  <div class="upload-card">
+    <h2>📊 Upload Excel File</h2>
+    <p class="subtitle">Upload student session data from Excel files</p>
+
+    <form (ngSubmit)="onSubmit()" #uploadForm="ngForm">
+      <!-- File Selection -->
+      <div class="form-group">
+        <label for="fileInput">Excel File (.xlsx or .xls) *</label>
+        <input type="file" id="fileInput" #fileInput accept=".xlsx,.xls" (change)="onFileSelected($event)" required
+          [disabled]="isUploading()" />
+        @if (selectedFile) {
+        <div class="file-info">
+          <span>📄 {{ selectedFile.name }}</span>
+          <span class="file-size">({{ (selectedFile.size / 1024).toFixed(2) }} KB)</span>
+        </div>
+        }
+      </div>
+
+      <!-- Lecture / Exam Session -->
+      <div class="form-group">
+        <label for="sessionNumber">
+          {{ isGeneralExam ? 'Exam Session Number *' : 'Lecture Number *' }}
+        </label>
+        <select id="sessionNumber" [(ngModel)]="sessionNumber" name="sessionNumber" required [disabled]="isUploading()">
+          @for (session of sessions(); track session) {
+          <option [value]="session">
+            {{ isGeneralExam ? ('Exam ' + session) : ('Lecture ' + session) }}
+          </option>
+          }
+        </select>
+      </div>
+
+      <!-- Lecture Number (normal lecture only, optional) -->
+      @if (!isGeneralExam) {
+      <div class="form-group">
+        <label for="lectureNumber">Lecture Number (optional)</label>
+        <input type="number" id="lectureNumber" [(ngModel)]="lectureNumber" name="lectureNumber" min="1"
+          [disabled]="isUploading()" />
+      </div>
+      }
+
+      <!-- Exam Name (general exam only) -->
+      @if (isGeneralExam) {
+      <div class="form-group">
+        <label for="examName">Exam Name *</label>
+        <input type="text" id="examName" [(ngModel)]="examName" name="examName" placeholder="e.g., Shamel Exam October"
+          required [disabled]="isUploading()" />
+      </div>
+      }
+
+      <!-- Mode-specific options -->
+      @if (!isGeneralExam) {
+      <div class="form-group">
+        <label for="lectureName">Lecture Name *</label>
+        <input type="text" id="lectureName" [(ngModel)]="lectureName" name="lectureName" placeholder="Type lecture name"
+          required [disabled]="isUploading()" />
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasExamGrade" [(ngModel)]="hasExamGrade" name="hasExamGrade"
+          [disabled]="isUploading()" />
+        <label for="hasExamGrade">Has Exam Grade</label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasPayment" [(ngModel)]="hasPayment" name="hasPayment" [disabled]="isUploading()" />
+        <label for="hasPayment">Has Payment</label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="hasTime" [(ngModel)]="hasTime" name="hasTime" [disabled]="isUploading()" />
+        <label for="hasTime">Has Finish Time</label>
+      </div>
+
+      @if (hasExamGrade) {
+      <div class="form-group">
+        <label for="quizMark">Quiz / Exam Mark</label>
+        <input type="number" id="quizMark" [(ngModel)]="quizMark" name="quizMark" step="0.01" placeholder="Enter mark"
+          [required]="hasExamGrade" [disabled]="isUploading()" />
+      </div>
+      }
+
+      @if (hasTime) {
+      <div class="form-group">
+        <label for="finishTime">Finish Time</label>
+        <input type="datetime-local" id="finishTime" [(ngModel)]="finishTime" name="finishTime"
+          [disabled]="isUploading()" />
+      </div>
+      }
+      }
+
+      <!-- General exam fields -->
+      @if (isGeneralExam) {
+      <div class="form-group">
+        <label for="examName">Exam Name *</label>
+        <input type="text" id="examName" [(ngModel)]="examName" name="examName" placeholder="e.g., Shamel Exam October"
+          required [disabled]="isUploading()" />
+      </div>
+
+      <div class="form-group">
+        <label for="examMark">Student mark</label>
+        <input type="number" id="examMark" [(ngModel)]="quizMark" name="examMark" step="1"
+          placeholder="type here the mark entered by admin" [disabled]="isUploading()" />
+        <small>Enter integer marks (not percentage)</small>
+      </div>
+      }
+
+      <!-- Group Selection -->
+      <div class="form-group">
+        <label for="group">Group *</label>
+        <select id="group" [(ngModel)]="selectedGroup" name="group" required [disabled]="isUploading()">
+          @for (group of groups(); track group) {
+          <option [value]="group">{{ group }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Exam Type -->
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="isGeneralExam" [(ngModel)]="isGeneralExam" name="isGeneralExam"
+          [disabled]="isUploading()" />
+        <label for="isGeneralExam">General Exam (uncheck for Normal Lecture)</label>
+      </div>
+
+      <!-- Error Message -->
+      @if (getErrorMessage()) {
+      <div class="alert alert-error">
+        ❌ {{ getErrorMessage() }}
+      </div>
+      }
+
+      <!-- Success Message -->
+      @if (getSuccessMessage()) {
+      <div class="alert alert-success">
+        ✅ {{ getSuccessMessage() }}
+        @if (uploadResult()?.updated_count !== undefined) {
+        <div class="result-details">
+          <p>✅ Updated: {{ uploadResult()?.updated_count }} records</p>
+          <p>📊 Total: {{ uploadResult()?.total_records }} records</p>
+          @if (uploadResult()?.error_count !== undefined && uploadResult()!.error_count! > 0) {
+          <p class="error-count">❌ Errors: {{ uploadResult()?.error_count }}</p>
+          <div class="error-actions" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <button type="button" class="btn btn-ghost" (click)="downloadErrors()">Download full error log</button>
+            <button type="button" class="btn btn-ghost" (click)="toggleFullErrors()">{{ showFullErrors() ? 'Hide' :
+              'Show' }} all errors</button>
+          </div>
+          @if (detailedErrors().length > 0) {
+          <div class="error-list">
+            <p class="text-sm font-medium mb-2">First errors encountered:</p>
+            <ul class="text-xs space-y-1">
+              @for (err of detailedErrors(); track $index) {
+              <li>• {{ err }}</li>
+              }
+            </ul>
+          </div>
+          }
+          @if (showFullErrors() && uploadResult()?.errors && uploadResult()!.errors!.length > 0) {
+          <div class="full-error-panel"
+            style="margin-top:10px;background:#111827/60;padding:10px;border-radius:8px;max-height:240px;overflow:auto;">
+            <p class="text-sm font-medium mb-2">All errors ({{ uploadResult()?.errors?.length }}):</p>
+            <ul class="text-xs space-y-1">
+              @for (err of uploadResult()!.errors!; track $index) {
+              <li>• {{ err }}</li>
+              }
+            </ul>
+          </div>
+          }
+          }
+        </div>
+        }
+      </div>
+      }
+
+      <!-- Upload Progress -->
+      @if (isUploading()) {
+      <div class="upload-progress">
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+        </div>
+        <p>Uploading... {{ uploadProgress() }}%</p>
+      </div>
+      }
+
+      <!-- Submit Button -->
+      <button type="submit" class="submit-btn" [disabled]="!selectedFile || isUploading()">
+        @if (isUploading()) {
+        <span>Uploading...</span>
+        } @else {
+        <span>Upload Excel File</span>
+        }
+      </button>
+
+      <!-- Reset Button -->
+      @if (uploadResult()?.success) {
+      <button type="button" class="reset-btn" (click)="resetForm()">
+        Upload Another File
+      </button>
+      }
+    </form>
+  </div>
+</div>
