@@ -48,6 +48,7 @@
         <div class="select-container">
           <select
             id="student-select"
+            (change)="onStudentChange($event)"
             class="student-select"
           >
             <option *ngFor="let student of students()" [value]="student.id">
@@ -326,7 +327,7 @@
                       <lucide-angular [img]="GraduationCap" class="info-icon"></lucide-angular>
                     </div>
                     <p class="info-label">QUIZ SCORE</p>
-                    <p class="info-value">{{ session.quizCorrect === 0 ? 'no quiz' : session.quizCorrect + '/' + session.quizTotal }}</p>
+                    <p class="info-value">{{ session.quizCorrect }}/{{ session.quizTotal }}</p>
                     <p class="info-sub">questions</p>
                   </div>
 

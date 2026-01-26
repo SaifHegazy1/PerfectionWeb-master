@@ -190,7 +190,7 @@ export class ParentDashboardComponent implements OnInit {
         endTime: '6:00 PM',
         attendance: 'missed',
         quizCorrect: 0,
-        quizTotal: 0,
+        quizTotal: 15,
         payment: 0,
         homeworkStatus: 'pending'
       }
